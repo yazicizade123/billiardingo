@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3-Cushion Billiards</title>
+    <title>3-Cushion Billiards Game</title>
     <!-- Tailwind CSS CDN for responsive and modern styling -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -39,10 +39,19 @@
             border: 10px solid #333; /* Rail/Frame color */
             border-radius: 8px;
             touch-action: none; /* Crucial for better touch input */
-            max-width: 90%; /* Max width for vertical orientation */
+            max-width: 90%; 
             max-height: 90%;
             background-color: #034827; /* Green cloth */
+            margin-right: 60px; /* Güç çubuğu için sağda boşluk bırak */
         }
+        
+        @media (min-width: 640px) {
+            /* Masa üstü cihazlarda daha fazla boşluk */
+            #billiardsCanvas {
+                 margin-right: 120px; 
+            }
+        }
+
 
         /* General styles for buttons */
         .game-button {
@@ -64,11 +73,60 @@
             box-shadow: 0 6px 12px rgba(0, 0, 0, 0.6);
         }
 
-        /* English Selector area repositioned for better vertical mobile fit */
+        /* Dikey Güç İstekası (Power Bar) Stili - İSTAKA Görünümü */
+        #powerBarContainer {
+            position: absolute;
+            right: 4px; /* Masa kenarına yakın */
+            top: 15%; /* Üste biraz boşluk bırak */
+            width: 32px; /* Genişlik */
+            height: 300px; /* Uzunluk */
+            background-color: #553A1B; /* Koyu Ahşap İsteka Gövdesi */
+            border-radius: 4px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+            overflow: hidden;
+            border: 4px solid #aaa; 
+            z-index: 100;
+            display: none; /* Başlangıçta gizli */
+            cursor: pointer; /* Tüm konteyner sürüklenmeye uygun */
+        }
+        
+        @media (min-width: 640px) {
+            #powerBarContainer {
+                right: 40px; 
+                width: 40px; 
+                height: 350px; 
+            }
+        }
+
+
+        #powerBarFill {
+            /* Çekilen gücü görselleştirmek için kullanılır. Handle'ın altından başlar. */
+            width: 100%;
+            height: 0%; 
+            background-color: #ef4444; /* Kırmızı güç */
+            position: absolute;
+            top: 0; 
+            transition: background-color 0.2s;
+        }
+        
+        #cueHandle {
+            /* Kullanıcının sürüklediği sarı tutacak */
+            height: 30px; 
+            width: 100%;
+            background-color: #facc15; /* Sarı tutacak */
+            position: absolute;
+            top: 0; /* Başlangıçta en üstte (0 güç) */
+            border-radius: 4px;
+            box-shadow: 0 0 5px rgba(0,0,0,0.8);
+            touch-action: none;
+            /* handle'ın konumu JS ile translateY(0px) olarak ayarlanacak */
+        }
+        
+        /* English Selector area repositioned to be under the power bar */
         #englishSelector {
             position: absolute;
-            bottom: 20px; /* Move to bottom left corner for vertical layout */
-            left: 20px;
+            right: 0px; 
+            top: calc(15% + 300px + 20px); /* Power bar (300px) altından 20px aşağı */
             width: 80px;
             height: 80px;
             background-color: rgba(255, 255, 255, 0.1);
@@ -79,39 +137,13 @@
             display: none; 
         }
 
-        @media (max-width: 768px) {
-             /* Adjust English selector position for smaller screens */
+        @media (min-width: 640px) {
             #englishSelector {
-                width: 60px;
-                height: 60px;
-                bottom: 10px;
-                left: 10px;
+                right: 30px; /* Masaüstünde biraz daha sola kaydır */
+                top: calc(15% + 350px + 20px); /* Yeni power bar yüksekliğine göre ayarlandı */
             }
         }
-
-        /* Power bar styling */
-        #powerBarContainer {
-            position: absolute;
-            top: 20px; /* Move power bar to top center for visibility */
-            left: 50%;
-            transform: translateX(-50%);
-            width: 80%;
-            max-width: 400px;
-            height: 20px;
-            background-color: rgba(0, 0, 0, 0.6);
-            border-radius: 10px;
-            overflow: hidden;
-            display: none;
-            border: 2px solid #aaa;
-            z-index: 100;
-        }
-
-        #powerBarFill {
-            width: 0%;
-            height: 100%;
-            background-color: #ef4444; /* Red power */
-            transition: background-color 0.2s;
-        }
+        
     </style>
 </head>
 <body>
@@ -128,52 +160,64 @@
     <!-- Pause Button (always visible during gameplay) -->
     <button id="pauseButton" class="game-button absolute top-4 right-4 text-sm px-3 py-2 z-10 hidden">PAUSE</button>
 
-    <!-- English/Spin Selection Area -->
+    <!-- Dikey Güç İstekası (Power Bar) -->
+    <div id="powerBarContainer">
+        <!-- Güç dolumu artık handle'ın üstünde ve aşağı doğru doluyor -->
+        <div id="powerBarFill"></div>
+        <!-- Handle başlangıçta en üstte (top: 0) -->
+        <div id="cueHandle" style="transform: translateY(0px);"></div>
+    </div>
+    
+    <!-- English/Spin Selection Area (Power bar'ın altına taşındı) -->
     <div id="englishSelector">
         <canvas id="englishCanvas" width="80" height="80"></canvas>
-    </div>
-
-    <!-- Power Bar -->
-    <div id="powerBarContainer">
-        <div id="powerBarFill"></div>
     </div>
 
 </div>
 
 <script>
-    // Constants (UPDATED FOR VERTICAL TABLE AND LARGER BALLS)
-    const CANVAS_WIDTH = 400;  // Vertical table width
-    const CANVAS_HEIGHT = 800; // Vertical table height
-    const BALL_RADIUS = 20;    // Doubled ball size
+    // Sabitler (DİKEY MASA VE BÜYÜK TOPLAR İÇİN GÜNCELLENDİ)
+    const CANVAS_WIDTH = 400;  // Dikey masa genişliği
+    const CANVAS_HEIGHT = 800; // Dikey masa yüksekliği
+    const BALL_RADIUS = 20;    // Top boyutu (2 kat büyütüldü)
     const CUSHION_WIDTH = 10; 
     const FRICTION = 0.99; 
     const SPIN_FACTOR = 0.005; 
     const MIN_VELOCITY = 0.1; 
     const MAX_SHOT_POWER = 15;
+    const POWER_SENSITIVITY = 5; 
     const CUE_BALL_COLOR = '#FFFFFF';
-    const OBJECT_BALL_COLOR = '#FF0000'; // Red
-    const OBJECT_BALL_2_COLOR = '#FFFF00'; // Yellow
+    const OBJECT_BALL_COLOR = '#FF0000'; // Kırmızı
+    const OBJECT_BALL_2_COLOR = '#FFFF00'; // Sarı
     const TEXT_COLOR = '#E5E7EB';
 
-    // Game State Variables
+    // Oyun Durum Değişkenleri
     let currentScreen = 'main_menu';
     let gameReady = false;
     let canvas, ctx;
     let englishCanvas, englishCtx;
+    let powerBarContainer, cueHandle;
     let balls = [];
     let level = 1;
     let shotAttempt = 1;
-    let isAiming = false;
-    let isDraggingAim = false; // New state for initial angle drag
-    let isPullingBack = false;
-    let mouseStart = { x: 0, y: 0 };
-    let shotAngle = 0;
+
+    // Nişan Alma Mekaniği Değişkenleri (SÜREKLİ NİŞAN ALMA)
+    let isAiming = false; // Toplar durduysa nişan alınıyor demektir
+    let isDragging = false; // Nişan açısı sürükleme durumu (Canvas)
+    let isSliderDragging = false; // Güç çubuğu sürükleme durumu (Power Bar)
+    let aimTargetPos = { x: 0, y: 0 }; // Nişan işaretçisinin masadaki konumu
+    let shotAngle = 0; // Atış açısı (bu, güç verme anında hesaplanır)
     let shotPower = 0;
+    
+    // YENİ: Güç çubuğu sürükleme başlangıç pozisyonu
+    let dragStartY = 0;
+
     let englishX = 0; 
     let englishY = 0; 
     let isBallMoving = false;
     let hitTargets = { red: false, yellow: false, bands: 0 };
     let currentCue = { name: "Standard Cue", powerMultiplier: 1.0, price: 0 };
+    let sliderMaxDisplacement = 0; 
 
     // Player Data (Managed by localStorage)
     let playerData = {
@@ -187,31 +231,26 @@
         music: true
     };
 
-    // Level Definitions (Ball positions adjusted for 400x800 canvas)
+    // Level Definitions (Top pozisyonları 400x800 tuvale göre ayarlandı)
     const levels = [
-        // Level 1
         { white: { x: 200, y: 700 }, red: { x: 200, y: 150 }, yellow: { x: 100, y: 400 } },
-        // Level 2
         { white: { x: 100, y: 750 }, red: { x: 300, y: 100 }, yellow: { x: 200, y: 450 } },
-        // Level 3
         { white: { x: 300, y: 600 }, red: { x: 100, y: 100 }, yellow: { x: 300, y: 200 } },
-        // Level 4
         { white: { x: 200, y: 750 }, red: { x: 150, y: 100 }, yellow: { x: 250, y: 200 } },
     ];
-
-    // Shop Items
+    
+    // Shop Items (Mağaza Öğeleri - Kısaltıldı)
     const shopItems = {
         cues: [
-            { name: "Power Stick", powerMultiplier: 1.2, price: 500, description: "A slightly stronger cue for more powerful shots." },
-            { name: "Pro Shooter", powerMultiplier: 1.5, price: 1500, description: "Professional grade, significantly increases shot power." },
+            { name: "Power Stick", powerMultiplier: 1.2, price: 500, description: "Daha güçlü atışlar için." },
+            { name: "Pro Shooter", powerMultiplier: 1.5, price: 1500, description: "Profesyonel düzeyde güç." },
         ],
         balls: [
-            { name: "Blue Marble", color: '#4477FF', price: 300, description: "A sleek blue design for your cue ball." },
-            { name: "Black Shadow", color: '#333333', price: 800, description: "Stealthy and cool, a dark cue ball." },
+            { name: "Blue Marble", color: '#4477FF', price: 300, description: "Mavi bilardo topu." },
+            { name: "Black Shadow", color: '#333333', price: 800, description: "Gizli ve havalı, koyu renkli top." },
         ]
     };
 
-    // Utility function to get user ID for localStorage (simplified, no real auth)
     const getUserId = () => 'local_user';
 
     // --- Persistence Functions (localStorage) ---
@@ -223,10 +262,8 @@
             level = playerData.currentLevel;
             currentCue = shopItems.cues.find(c => c.name === playerData.selectedCue) || shopItems.cues[0];
         }
-        // Ensure default items are always available
         if (!playerData.ownedCues.includes("Standard Cue")) playerData.ownedCues.push("Standard Cue");
         if (!playerData.ownedBalls.includes("Default")) playerData.ownedBalls.push("Default");
-
         console.log("Game Data Loaded:", playerData);
     }
 
@@ -234,8 +271,7 @@
         localStorage.setItem(`billiards_data_${getUserId()}`, JSON.stringify(playerData));
     }
 
-    // --- Ball Class (No Change Needed in Logic) ---
-
+    // --- Ball Class (Top Sınıfı - Basitleştirilmiş) ---
     class Ball {
         constructor(x, y, color, type) {
             this.x = x;
@@ -253,11 +289,9 @@
                 this.x += this.vx;
                 this.y += this.vy;
 
-                // Apply friction/damping
                 this.vx *= FRICTION;
                 this.vy *= FRICTION;
 
-                // Stop ball if velocity is very low
                 if (Math.hypot(this.vx, this.vy) < MIN_VELOCITY) {
                     this.vx = 0;
                     this.vy = 0;
@@ -273,40 +307,25 @@
 
         checkCushionCollision() {
             let hit = false;
-            // Left cushion
-            if (this.x - this.radius < CUSHION_WIDTH) {
-                this.x = CUSHION_WIDTH + this.radius;
-                this.vx *= -1;
-                hit = true;
-            }
-            // Right cushion
-            if (this.x + this.radius > CANVAS_WIDTH - CUSHION_WIDTH) {
-                this.x = CANVAS_WIDTH - CUSHION_WIDTH - this.radius;
-                this.vx *= -1;
-                hit = true;
-            }
-            // Top cushion
-            if (this.y - this.radius < CUSHION_WIDTH) {
-                this.y = CUSHION_WIDTH + this.radius;
-                this.vy *= -1;
-                hit = true;
-            }
-            // Bottom cushion
-            if (this.y + this.radius > CANVAS_HEIGHT - CUSHION_WIDTH) {
-                this.y = CANVAS_HEIGHT - CUSHION_WIDTH - this.radius;
-                this.vy *= -1;
-                hit = true;
-            }
+            
+            // Yastık (Bant) Çarpışma Kontrolü (Kenarlar)
+            // Sol yastık
+            if (this.x - this.radius < CUSHION_WIDTH) { this.x = CUSHION_WIDTH + this.radius; this.vx *= -1; hit = true; }
+            // Sağ yastık
+            if (this.x + this.radius > CANVAS_WIDTH - CUSHION_WIDTH) { this.x = CANVAS_WIDTH - CUSHION_WIDTH - this.radius; this.vx *= -1; hit = true; }
+            // Üst yastık
+            if (this.y - this.radius < CUSHION_WIDTH) { this.y = CUSHION_WIDTH + this.radius; this.vy *= -1; hit = true; }
+            // Alt yastık
+            if (this.y + this.radius > CANVAS_HEIGHT - CUSHION_WIDTH) { this.y = CANVAS_HEIGHT - CUSHION_WIDTH - this.radius; this.vy *= -1; hit = true; }
 
             if (hit && this.type === 'cue') {
                 hitTargets.bands++;
-                // Apply a slight velocity change based on English upon cushion impact
-                const spinAdjustment = Math.PI / 180 * 2; 
+                // İngiliz (falsolu vuruş) etkisi ekle
                 this.vx = Math.cos(Math.atan2(this.vy, this.vx) + (englishX * SPIN_FACTOR)) * Math.hypot(this.vx, this.vy);
                 this.vy = Math.sin(Math.atan2(this.vy, this.vx) + (englishY * SPIN_FACTOR)) * Math.hypot(this.vx, this.vy);
             }
         }
-
+        
         draw() {
             ctx.beginPath();
             ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
@@ -324,59 +343,62 @@
             ctx.fillStyle = drawColor;
             ctx.fill();
             ctx.strokeStyle = '#333';
-            ctx.lineWidth = 2; // Thicker border for larger balls
+            ctx.lineWidth = 2; 
             ctx.stroke();
 
-            // Draw center dot for English visualization
+            // English (Falso) noktası çiz
             if (this.type === 'cue') {
                 ctx.beginPath();
-                ctx.arc(this.x + englishX * 8, this.y + englishY * 8, 3, 0, Math.PI * 2); // Larger English dot
+                ctx.arc(this.x + englishX * 8, this.y + englishY * 8, 3, 0, Math.PI * 2); 
                 ctx.fillStyle = '#111';
                 ctx.fill();
             }
         }
     }
 
-    // --- Game Logic and Core Functions ---
+
+    // --- Oyun Mantığı ve Çekirdek Fonksiyonlar ---
 
     function initializeGame() {
         canvas = document.getElementById('billiardsCanvas');
         ctx = canvas.getContext('2d');
         englishCanvas = document.getElementById('englishCanvas');
         englishCtx = englishCanvas.getContext('2d');
+        powerBarContainer = document.getElementById('powerBarContainer');
+        cueHandle = document.getElementById('cueHandle');
+
 
         canvas.width = CANVAS_WIDTH;
         canvas.height = CANVAS_HEIGHT;
+        
+        // Güç çubuğunun maksimum çekilebileceği mesafeyi hesapla (Container - Handle yüksekliği)
+        sliderMaxDisplacement = powerBarContainer.clientHeight - cueHandle.clientHeight;
 
-        // Make canvas responsive (maintaining vertical aspect ratio)
         const updateCanvasSize = () => {
             const container = document.getElementById('gameContainer');
-            const ratio = CANVAS_WIDTH / CANVAS_HEIGHT; // 400/800 = 0.5
+            const ratio = CANVAS_WIDTH / CANVAS_HEIGHT; 
 
             let newWidth = container.clientWidth;
             let newHeight = container.clientHeight;
 
             if (newWidth / newHeight > ratio) {
-                // Constrained by height (too wide)
                 newWidth = newHeight * ratio;
             } else {
-                // Constrained by width (too tall)
                 newHeight = newWidth / ratio;
             }
 
-            // Ensure canvas fits nicely within the container
             const margin = 50; 
             canvas.style.width = `${Math.min(newWidth - margin, CANVAS_WIDTH)}px`;
             canvas.style.height = `${Math.min(newHeight - margin, CANVAS_HEIGHT)}px`;
         };
 
         window.addEventListener('resize', updateCanvasSize);
-        updateCanvasSize(); // Initial call
+        updateCanvasSize(); 
 
         loadGameData();
         loadLevel(level);
 
-        // Add input listeners
+        // Giriş dinleyicileri (Nişan Açısı - Canvas)
         canvas.addEventListener('mousedown', handlePointerDown);
         canvas.addEventListener('mousemove', handlePointerMove);
         canvas.addEventListener('mouseup', handlePointerUp);
@@ -384,6 +406,7 @@
         canvas.addEventListener('touchmove', handlePointerMove);
         canvas.addEventListener('touchend', handlePointerUp);
 
+        // Giriş dinleyicileri (Falso - English Canvas)
         englishCanvas.addEventListener('mousedown', handleEnglishDown);
         englishCanvas.addEventListener('mousemove', handleEnglishMove);
         englishCanvas.addEventListener('mouseup', handleEnglishUp);
@@ -391,6 +414,18 @@
         englishCanvas.addEventListener('touchmove', handleEnglishMove);
         englishCanvas.addEventListener('touchend', handleEnglishUp);
         
+        // Giriş dinleyicileri (Güç - TÜM İSTEKA KONTEYNERİ)
+        powerBarContainer.addEventListener('mousedown', handleCueSliderDown);
+        powerBarContainer.addEventListener('mousemove', handleCueSliderMove);
+        powerBarContainer.addEventListener('mouseup', handleCueSliderUp);
+        powerBarContainer.addEventListener('touchstart', handleCueSliderDown);
+        powerBarContainer.addEventListener('touchmove', handleCueSliderMove);
+        powerBarContainer.addEventListener('touchend', handleCueSliderUp);
+        
+        // Sayfa dışı hareketler için global eventler
+        document.addEventListener('mouseup', handleCueSliderUp);
+        document.addEventListener('touchend', handleCueSliderUp);
+
         document.getElementById('pauseButton').addEventListener('click', () => showScreen('pause_menu'));
 
         gameReady = true;
@@ -408,17 +443,24 @@
         level = lvl;
         shotAttempt = 1;
         isBallMoving = false;
-        isAiming = false;
-        isDraggingAim = false;
-        isPullingBack = false;
+        isAiming = true; // Toplar durduğu an nişan alma başlar
+        shotPower = 0;
+        
+        // UI elemanlarını göster
+        document.getElementById('englishSelector').style.display = 'block'; 
+        document.getElementById('powerBarContainer').style.display = 'block';
 
-        // Reset balls
+        // Topları sıfırla
         balls = [];
-        balls.push(new Ball(currentLevelData.white.x, currentLevelData.white.y, CUE_BALL_COLOR, 'cue'));
+        const cueBallData = currentLevelData.white;
+        balls.push(new Ball(cueBallData.x, cueBallData.y, CUE_BALL_COLOR, 'cue'));
         balls.push(new Ball(currentLevelData.red.x, currentLevelData.red.y, OBJECT_BALL_COLOR, 'red'));
         balls.push(new Ball(currentLevelData.yellow.x, currentLevelData.yellow.y, OBJECT_BALL_2_COLOR, 'yellow'));
         
+        // Başlangıç nişan noktası (Cue Ball'ın üstüne)
+        aimTargetPos = { x: cueBallData.x, y: cueBallData.y - 100 }; 
         resetShotTargets();
+        updatePowerBar(0); // Güç çubuğunu sıfırla
     }
 
     function resetShotTargets() {
@@ -430,6 +472,15 @@
             update();
             draw();
             checkGameState();
+            
+            // Toplar durduysa nişan alma aşamasını başlat
+            if (!isBallMoving && currentScreen === 'game') {
+                isAiming = true;
+                document.getElementById('englishSelector').style.display = 'block';
+                document.getElementById('powerBarContainer').style.display = 'block';
+            } else {
+                 isAiming = false;
+            }
         }
         requestAnimationFrame(gameLoop);
     }
@@ -446,9 +497,9 @@
         });
 
         isBallMoving = !allStopped;
-
+        
         if (isBallMoving) {
-            // Check for ball-to-ball collisions
+            // Çarpışmaları kontrol et
             for (let i = 0; i < balls.length; i++) {
                 for (let j = i + 1; j < balls.length; j++) {
                     checkBallCollision(balls[i], balls[j]);
@@ -460,36 +511,21 @@
     function checkGameState() {
         if (currentScreen !== 'game') return;
 
-        // If all balls stop, check win/lose condition
-        if (!isBallMoving && (isAiming || isPullingBack)) {
-            // Do nothing, still aiming/pulling back
-        } else if (!isBallMoving && shotPower > 0) {
-            // Shot has concluded
+        if (!isBallMoving && !isAiming) {
             
             if (hitTargets.red && hitTargets.yellow && hitTargets.bands >= 3) {
-                // Win
+                // KAZANÇ
                 showScreen('level_complete');
             } else {
-                // FAIL: Automatically restart level without message box
-                if (!hitTargets.red && !hitTargets.yellow) {
-                    console.log("Foul! Missed both balls. Auto Restarting level.");
-                } else {
-                    console.log(`Missed! Needed 3 cushions, only hit ${hitTargets.bands}. Auto Restarting level.`);
-                }
-                
-                loadLevel(level); // Auto restart
+                // KAYIP/FAUL
+                console.log(`Foul! Needed 3 cushions, only hit ${hitTargets.bands}. Auto Restarting level.`);
+                loadLevel(level); // Otomatik yeniden başlat
             }
             
             resetShotTargets();
             shotPower = 0;
-            // Now allow aiming again
-            isAiming = true;
-            document.getElementById('englishSelector').style.display = 'block';
-        } else if (!isBallMoving && shotPower === 0) {
-            // Ready to take a shot, set aiming true
-            isAiming = true;
-            document.getElementById('englishSelector').style.display = 'block';
-        }
+            isAiming = true; // Yeniden nişan almaya başla
+        } 
     }
 
     function checkBallCollision(b1, b2) {
@@ -499,19 +535,16 @@
         const minDist = b1.radius + b2.radius;
 
         if (distSq <= minDist * minDist) {
-            // Collision detected
             const dist = Math.sqrt(distSq);
-            const nx = dx / dist; // Normal x
-            const ny = dy / dist; // Normal y
+            const nx = dx / dist; 
+            const ny = dy / dist; 
 
-            // Separate balls to prevent sticking
             const overlap = minDist - dist;
             b1.x -= overlap * 0.5 * nx;
             b1.y -= overlap * 0.5 * ny;
             b2.x += overlap * 0.5 * nx;
             b2.y += overlap * 0.5 * ny;
 
-            // Simple 2D collision response (Conservation of Momentum)
             const v1n = b1.vx * nx + b1.vy * ny;
             const v2n = b2.vx * nx + b2.vy * ny;
 
@@ -524,93 +557,98 @@
                  b2.vx += (newV2n - v2n) * nx;
                  b2.vy += (newV2n - v2n) * ny;
 
-                // Check for cue ball hits
                 if (b1.type === 'cue' || b2.type === 'cue') {
                     const otherBall = b1.type === 'cue' ? b2 : b1;
                     if (otherBall.type === 'red') hitTargets.red = true;
                     if (otherBall.type === 'yellow') hitTargets.yellow = true;
                 }
             }
-
         }
     }
 
     function draw() {
-        // Clear canvas
+        // Tuvali Temizle
         ctx.fillStyle = '#034827';
         ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-        // Draw outer rails/bands 
+        // Dış Bantları Çiz
         ctx.fillStyle = '#056238';
         ctx.fillRect(0, 0, CANVAS_WIDTH, CUSHION_WIDTH); 
         ctx.fillRect(0, CANVAS_HEIGHT - CUSHION_WIDTH, CANVAS_WIDTH, CUSHION_WIDTH); 
         ctx.fillRect(0, CUSHION_WIDTH, CUSHION_WIDTH, CANVAS_HEIGHT - 2 * CUSHION_WIDTH); 
         ctx.fillRect(CANVAS_WIDTH - CUSHION_WIDTH, CUSHION_WIDTH, CUSHION_WIDTH, CANVAS_HEIGHT - 2 * CUSHION_WIDTH); 
 
-        // Draw balls
+        // Topları çiz
         balls.forEach(ball => ball.draw());
 
-        // Draw cue and aim line if aiming/pulling back
-        if (isAiming || isPullingBack) {
+        // Nişan alma çizimlerini yap
+        if (isAiming) {
             drawAiming();
         }
 
-        // Draw current level text
+        // Seviye metni çiz
         ctx.fillStyle = TEXT_COLOR;
         ctx.font = 'bold 24px Inter';
         ctx.textAlign = 'left';
-        ctx.fillText(`Level: ${level}`, 20, 40);
-        ctx.fillText(`Attempts: ${shotAttempt}`, 20, 75);
+        // Sadece Level bilgisini göster
+        ctx.fillText(`Level: ${level}`, 20, 40); 
 
-        // Draw English Selector UI
+        // English Seçici UI çiz
         drawEnglishSelector();
     }
 
     function drawAiming() {
         const cueBall = balls[0];
-        let angle = shotAngle;
-
-        const cueLength = 150;
-        const cueTipGap = BALL_RADIUS + 5; // Gap between cue tip and ball
-        let pullBackDist = 0;
-
-        if (isPullingBack) {
-            pullBackDist = shotPower * 10; // Pull back visually based on power
-        }
         
-        // Cue starts further away when pulled back
-        const cueStartDist = cueTipGap + pullBackDist; 
-        const cueEndDist = cueStartDist + cueLength;
+        // Nişan açısı sürekli olarak imleç pozisyonundan hesaplanır
+        const currentAngle = Math.atan2(aimTargetPos.y - cueBall.y, aimTargetPos.x - cueBall.x);
 
-        // Coordinates for the cue stick (drawn behind the ball relative to angle)
-        const cueStartX = cueBall.x - Math.cos(angle) * cueStartDist;
-        const cueStartY = cueBall.y - Math.sin(angle) * cueStartDist;
-        const cueEndX = cueBall.x - Math.cos(angle) * cueEndDist;
-        const cueEndY = cueBall.y - Math.sin(angle) * cueEndDist;
-
-        // Draw dotted aiming line (Straight path)
+        // --- Noktalı Nişan Çizgisi ---
         ctx.setLineDash([5, 5]);
-        ctx.strokeStyle = '#FFFFFF';
+        ctx.strokeStyle = '#FFF'; 
         ctx.lineWidth = 2;
-        ctx.globalAlpha = 0.5;
+        ctx.globalAlpha = 0.8;
         ctx.beginPath();
         ctx.moveTo(cueBall.x, cueBall.y);
-        ctx.lineTo(cueBall.x + Math.cos(angle) * 1000, cueBall.y + Math.sin(angle) * 1000);
+        
+        const lineEndX = cueBall.x + Math.cos(currentAngle) * 1000;
+        const lineEndY = cueBall.y + Math.sin(currentAngle) * 1000;
+        
+        ctx.lineTo(lineEndX, lineEndY);
         ctx.stroke();
         ctx.setLineDash([]);
         ctx.globalAlpha = 1.0;
-        
-        // Draw Cue Stick
-        ctx.strokeStyle = '#8B4513'; // Brown cue
-        ctx.lineWidth = 6;
-        ctx.lineCap = 'round';
-        ctx.beginPath();
-        ctx.moveTo(cueStartX, cueStartY);
-        ctx.lineTo(cueEndX, cueEndY);
-        ctx.stroke();
+
+        // İsteka çubuğu görsel geri bildirimi
+        if (shotPower > 0.1) {
+            const cueLength = 100;
+            const cueTipGap = BALL_RADIUS + 5; 
+            
+            // Güce göre geri çekilme mesafesi
+            const powerRatio = shotPower / MAX_SHOT_POWER;
+            const pullBackDist = powerRatio * 50; 
+
+            // İsteka, atış açısının tam tersi yönüne yerleştirilir
+            const cueStartDist = cueTipGap + pullBackDist; 
+            const cueEndDist = cueStartDist + cueLength;
+
+            const cueStartX = cueBall.x - Math.cos(currentAngle) * cueStartDist;
+            const cueStartY = cueBall.y - Math.sin(currentAngle) * cueStartDist;
+            const cueEndX = cueBall.x - Math.cos(currentAngle) * cueEndDist;
+            const cueEndY = cueBall.y - Math.sin(currentAngle) * cueEndDist;
+
+            ctx.strokeStyle = '#8B4513'; // Kahverengi isteka
+            ctx.lineWidth = 6;
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            ctx.moveTo(cueStartX, cueStartY);
+            ctx.lineTo(cueEndX, cueEndY);
+            ctx.stroke();
+        }
     }
 
     function drawEnglishSelector() {
+        // English (Falso) Seçiciyi Çiz
         const size = englishCanvas.width;
         const center = size / 2;
 
@@ -632,102 +670,119 @@
         englishCtx.fill();
     }
 
-    // --- Input Handlers (UPDATED FOR MANUAL AIMING DRAG) ---
 
-    function getRelativeCoordinates(e) {
-        const rect = canvas.getBoundingClientRect();
-        const x = (e.clientX || e.touches[0].clientX) - rect.left;
-        const y = (e.clientY || e.touches[0].clientY) - rect.top;
-        const scaleX = CANVAS_WIDTH / rect.width;
-        const scaleY = CANVAS_HEIGHT / rect.height;
-        return { x: x * scaleX, y: y * scaleY };
+    // --- Giriş İşleyicileri (Nişan Açısı - Canvas) ---
+
+    function getRelativeCoordinates(e, element) {
+        const rect = element.getBoundingClientRect();
+        const clientX = e.clientX || e.touches[0].clientX;
+        const clientY = e.clientY || e.touches[0].clientY;
+        const x = clientX - rect.left;
+        const y = clientY - rect.top;
+        
+        if (element.id === 'billiardsCanvas') {
+            const scaleX = CANVAS_WIDTH / rect.width;
+            const scaleY = CANVAS_HEIGHT / rect.height;
+            return { x: x * scaleX, y: y * scaleY };
+        }
+        return { x: x, y: y };
     }
 
     function handlePointerDown(e) {
         e.preventDefault();
-        if (currentScreen !== 'game' || isBallMoving) return;
+        if (currentScreen !== 'game' || isBallMoving || !isAiming) return;
 
-        const currentPos = getRelativeCoordinates(e);
-        const cueBall = balls[0];
-        const distToBall = Math.hypot(currentPos.x - cueBall.x, currentPos.y - cueBall.y);
-
-        if (distToBall < BALL_RADIUS * 2) {
-            // Click near the ball: START AIM DRAG
-            isAiming = true;
-            isDraggingAim = true;
-            isPullingBack = false;
-            mouseStart = currentPos;
-            shotPower = 0;
-            updatePowerBar();
-        } else {
-             isAiming = false;
+        // Sadece Canvas'ta nişan alma sürüklemesini başlat
+        if (e.target === canvas || e.target.id === 'billiardsCanvas') {
+            isDragging = true;
+            aimTargetPos = getRelativeCoordinates(e, canvas);
         }
     }
 
     function handlePointerMove(e) {
         e.preventDefault();
-        if (currentScreen !== 'game' || isBallMoving || !isAiming) return;
+        if (currentScreen !== 'game' || isBallMoving || !isAiming || !isDragging) return;
 
-        const currentPos = getRelativeCoordinates(e);
-        const cueBall = balls[0];
-        const dx = currentPos.x - mouseStart.x;
-        const dy = currentPos.y - mouseStart.y;
-        const dragDist = Math.hypot(dx, dy);
-        
-        if (isDraggingAim) {
-            // Step 1: Aiming (angle determination)
-            if (dragDist > 10) { // Set angle after minimal drag
-                // shotAngle is the opposite of the drag direction (cue pulls back from drag point)
-                shotAngle = Math.atan2(dy, dx) + Math.PI;
-                isDraggingAim = false; 
-                isPullingBack = true;
-                // Re-calculate mouseStart to be the point where the drag ended (to start power from 0 here)
-                mouseStart = currentPos; 
-                document.getElementById('powerBarContainer').style.display = 'block';
-            }
-        } else if (isPullingBack) {
-            // Step 2: Power charging (Pulling back along the established angle)
-            const powerDx = currentPos.x - mouseStart.x;
-            const powerDy = currentPos.y - mouseStart.y;
-            
-            // Calculate distance pulled along the shotAngle (opposite of cue direction)
-            const pullBackAngle = shotAngle + Math.PI;
-            const projectedDist = powerDx * Math.cos(pullBackAngle) + powerDy * Math.sin(pullBackAngle);
-
-            if (projectedDist > 0) {
-                 shotPower = Math.min(projectedDist / 5, MAX_SHOT_POWER); // Scale power
-            } else {
-                 shotPower = 0;
-            }
-
-            updatePowerBar();
-        }
+        // Sürükleme devam ederken nişan açısını sürekli güncelle
+        aimTargetPos = getRelativeCoordinates(e, canvas);
     }
 
     function handlePointerUp(e) {
         e.preventDefault();
         if (currentScreen !== 'game' || isBallMoving || !isAiming) return;
         
-        isDraggingAim = false;
+        // Sadece sürüklemeyi bitir, atış yapma. Atış güce bağlı
+        isDragging = false;
+    }
+    
+    // --- Giriş İşleyicileri (Güç Çubuğu - TÜM KONTEYNER) ---
 
-        if (isPullingBack && shotPower > 0) {
+    function handleCueSliderDown(e) {
+        e.preventDefault();
+        if (currentScreen !== 'game' || isBallMoving || !isAiming) return;
+        
+        // Power Bar Container, Handle veya Fill tıklandığında sürüklemeyi başlat
+        if (e.target === powerBarContainer || e.target === cueHandle || e.target.id === 'powerBarFill') {
+            isSliderDragging = true;
+            
+            // Başlangıç Y pozisyonunu kaydet (ekran koordinatı)
+            dragStartY = e.clientY || e.touches[0].clientY;
+            
+            // Sürükleme başlarken handle'ın 0 güç pozisyonunda olmasını sağla
+            cueHandle.style.transform = 'translateY(0px)';
+            updatePowerBar(0);
+            shotPower = 0;
+        }
+    }
+    
+    function handleCueSliderMove(e) {
+        e.preventDefault();
+        if (!isSliderDragging || !isAiming) return;
+
+        const clientY = e.clientY || e.touches[0].clientY;
+        
+        // Sürüklenen mesafeyi hesapla (aşağı doğru pozitif olmalı)
+        const dragDistance = clientY - dragStartY;
+        
+        // Kaymayı 0 (başlangıç) ve maksimum kayma (tam güç) arasında sınırla
+        let displacement = Math.min(sliderMaxDisplacement, Math.max(0, dragDistance));
+
+        // Handle'ı görsel olarak aşağı kaydır
+        cueHandle.style.transform = `translateY(${displacement}px)`;
+        
+        // Güç Hesaplama: normalize edilmiş kayma (0.0 - 1.0)
+        const normalizedPower = displacement / sliderMaxDisplacement;
+        
+        shotPower = normalizedPower * MAX_SHOT_POWER;
+        updatePowerBar(shotPower);
+    }
+
+    function handleCueSliderUp(e) {
+        // e.preventDefault(); // Burada engelleme, document üzerindeki dinleyiciyi de etkileyebilir.
+        if (!isSliderDragging || !isAiming) return;
+        isSliderDragging = false;
+        
+        // Güç çubuğu handle'ını sıfırla (animasyonlu geri dönüş)
+        cueHandle.style.transform = 'translateY(0px)';
+        
+        if (shotPower > 0.5) { // Minimum güç sınırı (vuruşu gerçekleştir)
             isAiming = false;
-            isPullingBack = false;
             document.getElementById('powerBarContainer').style.display = 'none';
             document.getElementById('englishSelector').style.display = 'none';
             executeShot();
         } else {
-            // If the user released before pulling back or power was 0
-            isPullingBack = false;
-            document.getElementById('powerBarContainer').style.display = 'none';
+            // Vuruş gerçekleşmedi, nişan alma aşamasında kal
+            shotPower = 0;
+            updatePowerBar(0);
         }
     }
-    
-    // English Selector Handlers (No change needed)
+
+
+    // English Selector Handlers (Falso Seçici İşleyicileri - Aynı Kaldı)
     let isEnglishDragging = false;
     function handleEnglishDown(e) {
         e.preventDefault();
-        if (currentScreen !== 'game' || isBallMoving || !isAiming) return;
+        if (currentScreen !== 'game' || isBallMoving || !isAiming) return; 
         isEnglishDragging = true;
         handleEnglishMove(e);
     }
@@ -746,10 +801,10 @@
         const dist = Math.hypot(x, y);
 
         if (dist <= maxDist) {
-            englishX = x / maxDist; // Normalized to -1 to 1
+            englishX = x / maxDist; // -1 ile 1 arasında normalize edildi
             englishY = y / maxDist;
         } else {
-             // Clamp to edge
+             // Kenara sabitle
             englishX = x / dist;
             englishY = y / dist;
         }
@@ -762,25 +817,32 @@
     }
 
 
-    function updatePowerBar() {
-        const powerLevel = Math.min(shotPower / MAX_SHOT_POWER, 1) * 100;
+    function updatePowerBar(power) {
+        const powerLevel = Math.min(power / MAX_SHOT_POWER, 1);
         const powerBarFill = document.getElementById('powerBarFill');
-        powerBarFill.style.width = `${powerLevel}%`;
+        
+        // Dikey çubuk (isteka) olduğu için yüksekliği (aşağı doğru dolum) ayarla
+        powerBarFill.style.height = `${powerLevel * 100}%`;
 
-        // Change color based on power
-        if (powerLevel < 33) {
-            powerBarFill.style.backgroundColor = '#22c55e'; // Green
-        } else if (powerLevel < 66) {
-            powerBarFill.style.backgroundColor = '#facc15'; // Yellow
+        // Güce göre renk değiştir
+        if (powerLevel < 0.33) {
+            powerBarFill.style.backgroundColor = '#22c55e'; // Yeşil
+        } else if (powerLevel < 0.66) {
+            powerBarFill.style.backgroundColor = '#facc15'; // Sarı
         } else {
-            powerBarFill.style.backgroundColor = '#ef4444'; // Red
+            powerBarFill.style.backgroundColor = '#ef4444'; // Kırmızı
         }
+
+        // İsteka handle'ının görsel konumu handleMove içinde ayarlanıyor.
     }
 
     function executeShot() {
         const cueBall = balls[0];
 
-        // Apply power and cue multiplier
+        // Atış anındaki son nişan açısını hesapla
+        shotAngle = Math.atan2(aimTargetPos.y - cueBall.y, aimTargetPos.x - cueBall.x);
+
+        // Güç ve isteka çarpanını uygula
         const totalPower = shotPower * currentCue.powerMultiplier;
 
         cueBall.vx = Math.cos(shotAngle) * totalPower;
@@ -790,15 +852,7 @@
         shotAttempt++;
     }
 
-    function normalizeAngle(angle) {
-        let normalized = angle % (2 * Math.PI);
-        if (normalized < 0) {
-            normalized += 2 * Math.PI;
-        }
-        return normalized;
-    }
-
-    // --- UI/Screen Management (Removed showMessageBox uses for failure) ---
+    // --- UI/Screen Management (Ekran Yönetimi - Aynı Kaldı) ---
 
     function showScreen(screenId) {
         currentScreen = screenId;
@@ -823,8 +877,13 @@
             case 'game':
                 container.style.display = 'none';
                 pauseButton.classList.remove('hidden');
-                document.getElementById('englishSelector').style.display = 'block';
-                isAiming = true;
+                
+                // Oyun devam ederken UI elemanlarının görünürlüğünü kontrol et
+                if (!isBallMoving) {
+                    document.getElementById('englishSelector').style.display = 'block';
+                    document.getElementById('powerBarContainer').style.display = 'block';
+                    isAiming = true;
+                }
                 break;
             case 'pause_menu':
                 container.innerHTML = createPauseMenu();
@@ -838,6 +897,8 @@
         }
         attachButtonListeners();
     }
+    
+    // ... (Menu functions and other boilerplate remains the same) ...
 
     function attachButtonListeners() {
         document.querySelectorAll('.js-button').forEach(button => {
@@ -885,7 +946,6 @@
         }
     }
     
-    // --- Message Box (Kept for Shop/General Use) ---
     function showMessageBox(title, message, onConfirm = null) {
         const container = document.getElementById('screenContainer');
         container.style.display = 'flex';
@@ -893,25 +953,25 @@
             <div class="bg-white p-6 rounded-xl shadow-2xl max-w-sm text-center">
                 <h3 class="text-2xl font-bold text-gray-800 mb-4">${title}</h3>
                 <p class="text-gray-600 mb-6">${message}</p>
-                <button id="msgBoxOk" class="game-button">OK</button>
+                <button id="msgBoxOk" class="game-button">ANLADIM</button>
             </div>
         `;
+        currentScreen = 'message_box'; 
+        
         document.getElementById('msgBoxOk').addEventListener('click', () => {
             if (onConfirm) onConfirm();
+            if(currentScreen === 'message_box') showScreen('game'); 
         });
-        currentScreen = 'message_box'; 
     }
-
-    // --- HTML Content Generators (No changes to logic, only output) ---
 
     function createMainMenu() {
         return `
             <div class="p-8 text-center bg-gray-800 rounded-xl shadow-2xl w-full max-w-sm">
                 <h1 class="text-4xl font-extrabold text-yellow-400 mb-8">3-CUSHION CAROM</h1>
                 <div class="flex flex-col space-y-4">
-                    <button class="game-button js-button" data-action="start">Start (Level ${playerData.currentLevel})</button>
-                    <button class="game-button js-button" data-action="options">Options</button>
-                    <button class="game-button js-button" data-action="shop">Shop</button>
+                    <button class="game-button js-button" data-action="start">Başla (Level ${playerData.currentLevel})</button>
+                    <button class="game-button js-button" data-action="options">Ayarlar</button>
+                    <button class="game-button js-button" data-action="shop">Mağaza</button>
                 </div>
             </div>
         `;
@@ -920,11 +980,11 @@
     function createPauseMenu() {
         return `
             <div class="p-8 text-center bg-gray-800 rounded-xl shadow-2xl w-full max-w-sm">
-                <h1 class="text-3xl font-bold text-white mb-6">Game Paused</h1>
+                <h1 class="text-3xl font-bold text-white mb-6">Oyun Duraklatıldı</h1>
                 <div class="flex flex-col space-y-4">
-                    <button class="game-button js-button" data-action="continue">Continue</button>
-                    <button class="game-button js-button" data-action="options">Settings</button>
-                    <button class="game-button js-button" data-action="main_menu">Main Menu</button>
+                    <button class="game-button js-button" data-action="continue">Devam Et</button>
+                    <button class="game-button js-button" data-action="options">Ayarlar</button>
+                    <button class="game-button js-button" data-action="main_menu">Ana Menü</button>
                 </div>
             </div>
         `;
@@ -946,14 +1006,13 @@
         const earned = calculateCoins();
         return `
             <div class="p-8 text-center bg-green-700 rounded-xl shadow-2xl w-full max-w-sm text-white">
-                <h1 class="text-4xl font-extrabold mb-4">LEVEL CLEARED!</h1>
-                <p class="text-lg mb-2">Attempts: ${shotAttempt}</p>
-                <p class="text-2xl font-bold mb-6">Coins Earned: <span class="text-yellow-300">${earned}</span></p>
-                <p class="text-lg mb-6">Total Coins: ${playerData.coins}</p>
+                <h1 class="text-4xl font-extrabold mb-4">LEVEL TAMAMLANDI!</h1>
+                <p class="text-lg mb-2">Deneme Sayısı: ${shotAttempt}</p>
+                <p class="text-2xl font-bold mb-6">Kazanılan Para: <span class="text-yellow-300">${earned}</span></p>
+                <p class="text-lg mb-6">Toplam Para: ${playerData.coins}</p>
                 <div class="flex flex-col space-y-4">
-                    <button class="game-button bg-green-900 js-button" data-action="next_level">Next Level</button>
-                    <button class="game-button js-button" data-action="options">Settings</button>
-                    <button class="game-button js-button" data-action="main_menu">Main Menu</button>
+                    <button class="game-button bg-green-900 js-button" data-action="next_level">Sonraki Level</button>
+                    <button class="game-button js-button" data-action="main_menu">Ana Menü</button>
                 </div>
             </div>
         `;
@@ -962,35 +1021,34 @@
     function createGameEndScreen() {
         return `
             <div class="p-8 text-center bg-yellow-500 rounded-xl shadow-2xl w-full max-w-sm text-gray-900">
-                <h1 class="text-4xl font-extrabold mb-4">CONGRATULATIONS!</h1>
-                <p class="text-xl mb-6">You've completed all available levels!</p>
-                <p class="text-lg mb-6">Total Coins: ${playerData.coins}</p>
+                <h1 class="text-4xl font-extrabold mb-4">TEBRİKLER!</h1>
+                <p class="text-xl mb-6">Tüm mevcut levelleri tamamladınız!</p>
+                <p class="text-lg mb-6">Toplam Para: ${playerData.coins}</p>
                 <div class="flex flex-col space-y-4">
-                    <button class="game-button bg-yellow-700 text-white js-button" data-action="shop">Visit Shop</button>
-                    <button class="game-button bg-gray-700 text-white js-button" data-action="main_menu">Main Menu</button>
+                    <button class="game-button bg-yellow-700 text-white js-button" data-action="shop">Mağazayı Ziyaret Et</button>
+                    <button class="game-button bg-gray-700 text-white js-button" data-action="main_menu">Ana Menü</button>
                 </div>
             </div>
         `;
     }
 
     function createOptionsScreen() {
-        const sfxText = playerData.sfx ? 'ON' : 'OFF';
-        const musicText = playerData.music ? 'ON' : 'OFF';
+        const sfxText = playerData.sfx ? 'AÇIK' : 'KAPALI';
+        const musicText = playerData.music ? 'AÇIK' : 'KAPALI';
 
         return `
             <div class="p-8 text-center bg-gray-800 rounded-xl shadow-2xl w-full max-w-sm text-white">
-                <h1 class="text-3xl font-bold mb-6">Options</h1>
+                <h1 class="text-3xl font-bold mb-6">Ayarlar</h1>
                 <div class="flex flex-col space-y-4">
                     <div class="flex justify-between items-center bg-gray-700 p-3 rounded-lg">
-                        <span>Sound Effects:</span>
+                        <span>Ses Efektleri:</span>
                         <button class="game-button text-sm px-4 py-2 ${playerData.sfx ? 'bg-green-600' : 'bg-red-600'} js-button" data-action="toggle_sfx">${sfxText}</button>
                     </div>
                     <div class="flex justify-between items-center bg-gray-700 p-3 rounded-lg">
-                        <span>Music:</span>
+                        <span>Müzik:</span>
                         <button class="game-button text-sm px-4 py-2 ${playerData.music ? 'bg-green-600' : 'bg-red-600'} js-button" data-action="toggle_music">${musicText}</button>
                     </div>
-                    <a href="mailto:support@billiardsgame.com" class="game-button bg-indigo-600 hover:bg-indigo-700" target="_blank">Contact Us</a>
-                    <button class="game-button bg-gray-500 hover:bg-gray-600 js-button" data-action="main_menu">Back</button>
+                    <button class="game-button bg-gray-500 hover:bg-gray-600 js-button" data-action="main_menu">Geri</button>
                 </div>
             </div>
         `;
@@ -999,24 +1057,24 @@
     function createShopScreen() {
         let shopHtml = `
             <div class="p-8 text-center bg-gray-800 rounded-xl shadow-2xl w-full max-w-md text-white">
-                <h1 class="text-3xl font-bold mb-2">Shop</h1>
-                <p class="text-yellow-400 text-xl mb-6">Coins: ${playerData.coins}</p>
+                <h1 class="text-3xl font-bold mb-2">Mağaza</h1>
+                <p class="text-yellow-400 text-xl mb-6">Para: ${playerData.coins} 💰</p>
                 
-                <h2 class="text-2xl font-semibold mt-6 mb-3 border-b border-gray-700 pb-1">Cues (Power)</h2>
+                <h2 class="text-2xl font-semibold mt-6 mb-3 border-b border-gray-700 pb-1">İstekalar (Güç)</h2>
         `;
 
         // Cues Section
         shopItems.cues.forEach(item => {
             const isOwned = playerData.ownedCues.includes(item.name);
             const isSelected = playerData.selectedCue === item.name;
-            const buttonText = isOwned ? (isSelected ? 'EQUIPPED' : 'Equip') : `Buy - ${item.price} 💰`;
+            const buttonText = isOwned ? (isSelected ? 'KULLANILIYOR' : 'Kullan') : `Satın Al - ${item.price} 💰`;
             const buttonColor = isOwned ? (isSelected ? 'bg-green-600' : 'bg-blue-600') : (playerData.coins >= item.price ? 'bg-red-500' : 'bg-gray-600');
 
             shopHtml += `
                 <div class="flex justify-between items-center bg-gray-700 p-3 rounded-lg mb-3">
                     <div class="text-left">
                         <span class="font-bold">${item.name}</span> 
-                        <span class="text-sm text-gray-400"> (Power x${item.powerMultiplier.toFixed(1)})</span>
+                        <span class="text-sm text-gray-400"> (Güç x${item.powerMultiplier.toFixed(1)})</span>
                         <p class="text-xs text-gray-400">${item.description}</p>
                     </div>
                     <button class="game-button text-sm px-4 py-2 ${buttonColor} js-shop-item" data-type="cue" data-name="${item.name}" data-price="${item.price}" data-owned="${isOwned}" data-selected="${isSelected}" ${!isOwned && playerData.coins < item.price ? 'disabled' : ''}>
@@ -1026,13 +1084,13 @@
             `;
         });
         
-        shopHtml += `<h2 class="text-2xl font-semibold mt-6 mb-3 border-b border-gray-700 pb-1">Balls (Cosmetic)</h2>`;
+        shopHtml += `<h2 class="text-2xl font-semibold mt-6 mb-3 border-b border-gray-700 pb-1">Toplar (Kozmetik)</h2>`;
 
         // Balls Section
         shopItems.balls.forEach(item => {
             const isOwned = playerData.ownedBalls.includes(item.name);
             const isSelected = playerData.selectedBall === item.name;
-            const buttonText = isOwned ? (isSelected ? 'EQUIPPED' : 'Equip') : `Buy - ${item.price} 💰`;
+            const buttonText = isOwned ? (isSelected ? 'KULLANILIYOR' : 'Kullan') : `Satın Al - ${item.price} 💰`;
             const buttonColor = isOwned ? (isSelected ? 'bg-green-600' : 'bg-blue-600') : (playerData.coins >= item.price ? 'bg-red-500' : 'bg-gray-600');
 
             shopHtml += `
@@ -1051,7 +1109,7 @@
 
 
         shopHtml += `
-                <button class="game-button bg-gray-500 hover:bg-gray-600 mt-6 js-button" data-action="main_menu">Back</button>
+                <button class="game-button bg-gray-500 hover:bg-gray-600 mt-6 js-button" data-action="main_menu">Geri</button>
             </div>
         `;
 
@@ -1080,7 +1138,7 @@
                 playerData.coins -= price;
                 if (type === 'cue') playerData.ownedCues.push(name);
                 if (type === 'ball') playerData.ownedBalls.push(name);
-                showMessageBox("Purchase Successful!", `${name} has been added to your inventory.`, () => {
+                showMessageBox("Satın Alma Başarılı!", `${name} envanterinize eklendi.`, () => {
                     // Equip after purchase
                     if (type === 'cue') playerData.selectedCue = name;
                     if (type === 'ball') playerData.selectedBall = name;
@@ -1090,7 +1148,7 @@
                 });
 
             } else {
-                 showMessageBox("Not Enough Coins", `You need ${price - playerData.coins} more coins to buy ${name}.`);
+                 showMessageBox("Yetersiz Para", `Satın almak için ${price - playerData.coins} paraya daha ihtiyacın var.`);
             }
         } else if (!isSelected) {
             // Equip item
