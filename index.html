@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="tr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3-Cushion Billiards Game</title>
+    <title>3-Cushion Bilardo Oyunu</title>
     <!-- Tailwind CSS CDN for responsive and modern styling -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -38,7 +38,7 @@
             box-shadow: 0 10px 20px rgba(0, 0, 0, 0.5);
             border: 10px solid #333; /* Rail/Frame color */
             border-radius: 8px;
-            touch-action: none; /* Crucial for better touch input */
+            touch-action: none; /* Crucial for better touch input on table */
             max-width: 90%; 
             max-height: 90%;
             background-color: #034827; /* Green cloth */
@@ -73,60 +73,73 @@
             box-shadow: 0 6px 12px rgba(0, 0, 0, 0.6);
         }
 
-        /* Dikey Güç İstekası (Power Bar) Stili - İSTAKA Görünümü */
+        /* Dikey Güç İstekası (Power Bar) Stili */
         #powerBarContainer {
             position: absolute;
             right: 4px; /* Masa kenarına yakın */
-            top: 15%; /* Üste biraz boşluk bırak */
-            width: 32px; /* Genişlik */
-            height: 300px; /* Uzunluk */
-            background-color: #553A1B; /* Koyu Ahşap İsteka Gövdesi */
-            border-radius: 4px;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+            top: 15%; 
+            width: 60px; 
+            height: 350px; 
+            background-color: #2D3748; /* Koyu Gri Zemin */
+            border-radius: 8px;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.7);
             overflow: hidden;
-            border: 4px solid #aaa; 
+            border: 2px solid #aaa; 
             z-index: 100;
-            display: none; /* Başlangıçta gizli */
-            cursor: pointer; /* Tüm konteyner sürüklenmeye uygun */
+            display: none; 
+            cursor: pointer; 
+            touch-action: none; 
+            padding: 10px 0; 
+            box-sizing: border-box; 
         }
         
         @media (min-width: 640px) {
             #powerBarContainer {
                 right: 40px; 
-                width: 40px; 
-                height: 350px; 
             }
         }
 
-
+        /* Güç Barı Dolumu */
         #powerBarFill {
-            /* Çekilen gücü görselleştirmek için kullanılır. Handle'ın altından başlar. */
             width: 100%;
             height: 0%; 
-            background-color: #ef4444; /* Kırmızı güç */
+            background-color: #ef4444; 
             position: absolute;
-            top: 0; 
-            transition: background-color 0.2s;
+            bottom: 0; 
+            transition: height 0.05s ease-out, background-color 0.2s;
+            border-radius: 0 0 8px 8px;
+            z-index: 100; 
         }
-        
+
+        /* İsteka Handle: Artık görsel hareketi bu taşıyor */
         #cueHandle {
-            /* Kullanıcının sürüklediği sarı tutacak */
-            height: 30px; 
-            width: 100%;
-            background-color: #facc15; /* Sarı tutacak */
             position: absolute;
-            top: 0; /* Başlangıçta en üstte (0 güç) */
-            border-radius: 4px;
-            box-shadow: 0 0 5px rgba(0,0,0,0.8);
-            touch-action: none;
-            /* handle'ın konumu JS ile translateY(0px) olarak ayarlanacak */
+            top: 10px; /* Üst padding'den başla */
+            left: 0;
+            width: 100%;
+            height: calc(100% - 20px); /* Konteyner yüksekliği - 2 * padding */
+            display: flex;
+            justify-content: center;
+            align-items: flex-start; /* İsteka başlangıçta en üstte dursun */
+            touch-action: none; 
+            z-index: 101; 
+            pointer-events: none; /* Sadece powerBarContainer'ı dinleyeceğiz */
+            transition: transform 0.05s ease-out; /* Hızlı hareket için */
+            transform: translateY(0px); /* Başlangıç konumu */
+        }
+
+        #cueHandle svg {
+            /* Dikey İsteka SVG boyutu */
+            height: 100%; /* Konteyneri kapla */
+            width: 8px;
+            filter: drop-shadow(0 0 4px rgba(0, 0, 0, 0.8));
         }
         
         /* English Selector area repositioned to be under the power bar */
         #englishSelector {
             position: absolute;
             right: 0px; 
-            top: calc(15% + 300px + 20px); /* Power bar (300px) altından 20px aşağı */
+            top: calc(15% + 350px + 20px); 
             width: 80px;
             height: 80px;
             background-color: rgba(255, 255, 255, 0.1);
@@ -139,8 +152,7 @@
 
         @media (min-width: 640px) {
             #englishSelector {
-                right: 30px; /* Masaüstünde biraz daha sola kaydır */
-                top: calc(15% + 350px + 20px); /* Yeni power bar yüksekliğine göre ayarlandı */
+                right: 30px; 
             }
         }
         
@@ -158,14 +170,25 @@
     </div>
 
     <!-- Pause Button (always visible during gameplay) -->
-    <button id="pauseButton" class="game-button absolute top-4 right-4 text-sm px-3 py-2 z-10 hidden">PAUSE</button>
+    <button id="pauseButton" class="game-button absolute top-4 right-4 text-sm px-3 py-2 z-10 hidden">DURAKLAT</button>
 
     <!-- Dikey Güç İstekası (Power Bar) -->
     <div id="powerBarContainer">
-        <!-- Güç dolumu artık handle'ın üstünde ve aşağı doğru doluyor -->
+        <!-- Güç dolumu alttan yukarı dolsun diye fill altta -->
         <div id="powerBarFill"></div>
-        <!-- Handle başlangıçta en üstte (top: 0) -->
-        <div id="cueHandle" style="transform: translateY(0px);"></div>
+        
+        <!-- İsteka Handle (Görsel ve Sürükleme Alanı) -->
+        <div id="cueHandle">
+            <!-- Dikey İsteka SVG İkonu -->
+            <svg viewBox="0 0 8 330" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <!-- İsteka Gövdesi (Uzun ve Kahverengi) -->
+                <rect x="0" y="0" width="8" height="330" rx="4" fill="#A0522D"/> 
+                <!-- İsteka Ucu (Tip - En üstte) -->
+                <circle cx="4" cy="4" r="3" fill="#FFE4B5"/> 
+                <!-- Kuyruk Topuzu (En altta) -->
+                <circle cx="4" cy="326" r="4" fill="#333333"/> 
+            </svg>
+        </div>
     </div>
     
     <!-- English/Spin Selection Area (Power bar'ın altına taşındı) -->
@@ -179,45 +202,89 @@
     // Sabitler (DİKEY MASA VE BÜYÜK TOPLAR İÇİN GÜNCELLENDİ)
     const CANVAS_WIDTH = 400;  // Dikey masa genişliği
     const CANVAS_HEIGHT = 800; // Dikey masa yüksekliği
-    const BALL_RADIUS = 20;    // Top boyutu (2 kat büyütüldü)
+    const BALL_RADIUS = 20;    // Top boyutu
     const CUSHION_WIDTH = 10; 
     const FRICTION = 0.99; 
     const SPIN_FACTOR = 0.005; 
     const MIN_VELOCITY = 0.1; 
     const MAX_SHOT_POWER = 15;
-    const POWER_SENSITIVITY = 5; 
+    
+    // YENİ HASSASİYET AYARI (Gereken çekme mesafesi artırıldı)
+    const POWER_DRAG_SENSITIVITY = 500; // Maksimum güce ulaşmak için ekranda çekilmesi gereken piksel mesafesi. Bu değer ne kadar büyükse, hassasiyet o kadar artar.
+    
     const CUE_BALL_COLOR = '#FFFFFF';
     const OBJECT_BALL_COLOR = '#FF0000'; // Kırmızı
     const OBJECT_BALL_2_COLOR = '#FFFF00'; // Sarı
     const TEXT_COLOR = '#E5E7EB';
+
+    // --- OYUN VERİLERİ (LEVELS ve SHOPITEMS) ---
+    
+    // Level Konumları (Beyaz, Kırmızı, Sarı)
+    const levels = [
+        // Level 1: Basic setup for 3-cushion (Easy)
+        {
+            white: { x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT * 0.8 },
+            red: { x: CANVAS_WIDTH * 0.3, y: CANVAS_HEIGHT * 0.25 },
+            yellow: { x: CANVAS_WIDTH * 0.7, y: CANVAS_HEIGHT * 0.45 }
+        },
+        // Level 2: Slightly more challenging
+        {
+            white: { x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT * 0.75 },
+            red: { x: CANVAS_WIDTH * 0.25, y: CANVAS_HEIGHT * 0.35 },
+            yellow: { x: CANVAS_WIDTH * 0.6, y: CANVAS_HEIGHT * 0.15 }
+        },
+        // Level 3: Corner shot focus
+        {
+            white: { x: CANVAS_WIDTH * 0.7, y: CANVAS_HEIGHT * 0.6 },
+            red: { x: CANVAS_WIDTH * 0.8, y: CANVAS_HEIGHT * 0.15 },
+            yellow: { x: CANVAS_WIDTH * 0.2, y: CANVAS_HEIGHT * 0.2 }
+        }
+    ];
+
+    // Dükkan Öğeleri (İstekalar ve Toplar)
+    const shopItems = {
+        cues: [
+            { name: "Standard Cue", powerMultiplier: 1.0, price: 0, description: "Standart isteka. Güçlü ve güvenilir." },
+            { name: "Power Max Cue", powerMultiplier: 1.5, price: 1000, description: "Daha sert vuruşlar için ekstra güç." },
+            { name: "Control Pro Cue", powerMultiplier: 1.1, price: 2500, description: "Hafif güç artışı, falsoda daha iyi kontrol." }
+        ],
+        balls: [
+            { name: "Default", color: CUE_BALL_COLOR, price: 0, description: "Standart beyaz top." },
+            { name: "Blue Marble", color: '#00BFFF', price: 500, description: "Mavi mermer efektli beyaz top." },
+            { name: "Gold Dust", color: '#FFD700', price: 1500, description: "Altın tozu desenli lüks top." }
+        ]
+    };
 
     // Oyun Durum Değişkenleri
     let currentScreen = 'main_menu';
     let gameReady = false;
     let canvas, ctx;
     let englishCanvas, englishCtx;
-    let powerBarContainer, cueHandle;
+    let powerBarContainer, cueHandle, powerBarFill;
     let balls = [];
     let level = 1;
     let shotAttempt = 1;
 
-    // Nişan Alma Mekaniği Değişkenleri (SÜREKLİ NİŞAN ALMA)
-    let isAiming = false; // Toplar durduysa nişan alınıyor demektir
-    let isDragging = false; // Nişan açısı sürükleme durumu (Canvas)
-    let isSliderDragging = false; // Güç çubuğu sürükleme durumu (Power Bar)
-    let aimTargetPos = { x: 0, y: 0 }; // Nişan işaretçisinin masadaki konumu
-    let shotAngle = 0; // Atış açısı (bu, güç verme anında hesaplanır)
+    // Nişan Alma Mekaniği Değişkenleri
+    let isAiming = false; 
+    let isDragging = false; 
+    let aimTargetPos = { x: 0, y: 0 }; 
+    let shotAngle = 0; 
     let shotPower = 0;
     
-    // YENİ: Güç çubuğu sürükleme başlangıç pozisyonu
-    let dragStartY = 0;
-
+    // GÜÇ ÇUBUĞU VE HAREKET DEĞİŞKENLERİ
+    let isSliderDragging = false; 
+    let dragStartScreenY = 0; 
+    let VISUAL_BAR_HEIGHT = 0; // Güç çubuğunun net görsel yüksekliği
+    let cueHandleVisualY = 0; // İsteka görselinin pozisyonu (0'dan VISUAL_BAR_HEIGHT'a kadar)
+    
     let englishX = 0; 
     let englishY = 0; 
     let isBallMoving = false;
     let hitTargets = { red: false, yellow: false, bands: 0 };
     let currentCue = { name: "Standard Cue", powerMultiplier: 1.0, price: 0 };
-    let sliderMaxDisplacement = 0; 
+    
+    const CUE_CONTAINER_PADDING = 10; 
 
     // Player Data (Managed by localStorage)
     let playerData = {
@@ -229,26 +296,6 @@
         selectedBall: "Default",
         sfx: true,
         music: true
-    };
-
-    // Level Definitions (Top pozisyonları 400x800 tuvale göre ayarlandı)
-    const levels = [
-        { white: { x: 200, y: 700 }, red: { x: 200, y: 150 }, yellow: { x: 100, y: 400 } },
-        { white: { x: 100, y: 750 }, red: { x: 300, y: 100 }, yellow: { x: 200, y: 450 } },
-        { white: { x: 300, y: 600 }, red: { x: 100, y: 100 }, yellow: { x: 300, y: 200 } },
-        { white: { x: 200, y: 750 }, red: { x: 150, y: 100 }, yellow: { x: 250, y: 200 } },
-    ];
-    
-    // Shop Items (Mağaza Öğeleri - Kısaltıldı)
-    const shopItems = {
-        cues: [
-            { name: "Power Stick", powerMultiplier: 1.2, price: 500, description: "Daha güçlü atışlar için." },
-            { name: "Pro Shooter", powerMultiplier: 1.5, price: 1500, description: "Profesyonel düzeyde güç." },
-        ],
-        balls: [
-            { name: "Blue Marble", color: '#4477FF', price: 300, description: "Mavi bilardo topu." },
-            { name: "Black Shadow", color: '#333333', price: 800, description: "Gizli ve havalı, koyu renkli top." },
-        ]
     };
 
     const getUserId = () => 'local_user';
@@ -264,7 +311,6 @@
         }
         if (!playerData.ownedCues.includes("Standard Cue")) playerData.ownedCues.push("Standard Cue");
         if (!playerData.ownedBalls.includes("Default")) playerData.ownedBalls.push("Default");
-        console.log("Game Data Loaded:", playerData);
     }
 
     function saveGameData() {
@@ -273,6 +319,7 @@
 
     // --- Ball Class (Top Sınıfı - Basitleştirilmiş) ---
     class Ball {
+        // ... (Ball class içeriği aynı kaldı)
         constructor(x, y, color, type) {
             this.x = x;
             this.y = y;
@@ -333,10 +380,8 @@
             let drawColor = this.color;
             if (this.type === 'cue') {
                 const customBall = shopItems.balls.find(b => b.name === playerData.selectedBall);
-                if (customBall && playerData.selectedBall !== 'Default') {
+                if (customBall) {
                     drawColor = customBall.color;
-                } else if (playerData.selectedBall === 'Default') {
-                    drawColor = CUE_BALL_COLOR;
                 }
             }
 
@@ -366,13 +411,18 @@
         englishCtx = englishCanvas.getContext('2d');
         powerBarContainer = document.getElementById('powerBarContainer');
         cueHandle = document.getElementById('cueHandle');
+        powerBarFill = document.getElementById('powerBarFill');
 
 
         canvas.width = CANVAS_WIDTH;
         canvas.height = CANVAS_HEIGHT;
         
-        // Güç çubuğunun maksimum çekilebileceği mesafeyi hesapla (Container - Handle yüksekliği)
-        sliderMaxDisplacement = powerBarContainer.clientHeight - cueHandle.clientHeight;
+        // GÜNCELLENDİ: Güç çubuğunun maksimum çekilebileceği görsel mesafeyi hesapla
+        const containerPaddingY = 2 * CUE_CONTAINER_PADDING; 
+        VISUAL_BAR_HEIGHT = powerBarContainer.clientHeight - containerPaddingY; 
+        
+        // Başlangıçta görseli sıfırla
+        updateCueHandleVisuals(); 
 
         const updateCanvasSize = () => {
             const container = document.getElementById('gameContainer');
@@ -414,16 +464,14 @@
         englishCanvas.addEventListener('touchmove', handleEnglishMove);
         englishCanvas.addEventListener('touchend', handleEnglishUp);
         
-        // Giriş dinleyicileri (Güç - TÜM İSTEKA KONTEYNERİ)
+        // Giriş dinleyicileri (Güç - KESİNTİSİZ ÇEKME İÇİN DÜZELTİLDİ)
         powerBarContainer.addEventListener('mousedown', handleCueSliderDown);
-        powerBarContainer.addEventListener('mousemove', handleCueSliderMove);
-        powerBarContainer.addEventListener('mouseup', handleCueSliderUp);
         powerBarContainer.addEventListener('touchstart', handleCueSliderDown);
-        powerBarContainer.addEventListener('touchmove', handleCueSliderMove);
-        powerBarContainer.addEventListener('touchend', handleCueSliderUp);
         
-        // Sayfa dışı hareketler için global eventler
+        // DÜZELTME #4: Çekmeyi bırakma ve hareket etme olaylarını Document'e bağla (Dikdörtgen dışına çıkma sorununu çözer)
+        document.addEventListener('mousemove', handleCueSliderMove);
         document.addEventListener('mouseup', handleCueSliderUp);
+        document.addEventListener('touchmove', handleCueSliderMove);
         document.addEventListener('touchend', handleCueSliderUp);
 
         document.getElementById('pauseButton').addEventListener('click', () => showScreen('pause_menu'));
@@ -460,7 +508,8 @@
         // Başlangıç nişan noktası (Cue Ball'ın üstüne)
         aimTargetPos = { x: cueBallData.x, y: cueBallData.y - 100 }; 
         resetShotTargets();
-        updatePowerBar(0); // Güç çubuğunu sıfırla
+        cueHandleVisualY = 0; // İsteka pozisyonunu sıfırla
+        updateCueHandleVisuals(); // Görseli ve güç barını sıfırla
     }
 
     function resetShotTargets() {
@@ -518,7 +567,7 @@
                 showScreen('level_complete');
             } else {
                 // KAYIP/FAUL
-                console.log(`Foul! Needed 3 cushions, only hit ${hitTargets.bands}. Auto Restarting level.`);
+                console.log(`Faul! 3 bant gerekiyordu, sadece ${hitTargets.bands} vuruş yapıldı. Otomatik level yeniden başlatılıyor.`);
                 loadLevel(level); // Otomatik yeniden başlat
             }
             
@@ -624,7 +673,7 @@
             const cueLength = 100;
             const cueTipGap = BALL_RADIUS + 5; 
             
-            // Güce göre geri çekilme mesafesi
+            // Güce göre geri çekilme mesafesi (Bu görsel geri bildirim isteka çubuğundaki hareketten bağımsızdır)
             const powerRatio = shotPower / MAX_SHOT_POWER;
             const pullBackDist = powerRatio * 50; 
 
@@ -675,8 +724,8 @@
 
     function getRelativeCoordinates(e, element) {
         const rect = element.getBoundingClientRect();
-        const clientX = e.clientX || e.touches[0].clientX;
-        const clientY = e.clientY || e.touches[0].clientY;
+        const clientX = e.clientX || (e.touches && e.touches[0] ? e.touches[0].clientX : 0);
+        const clientY = e.clientY || (e.touches && e.touches[0] ? e.touches[0].clientY : 0);
         const x = clientX - rect.left;
         const y = clientY - rect.top;
         
@@ -711,74 +760,90 @@
         e.preventDefault();
         if (currentScreen !== 'game' || isBallMoving || !isAiming) return;
         
-        // Sadece sürüklemeyi bitir, atış yapma. Atış güce bağlı
+        // Sadece sürüklemeyi bitir, atış yapma güce bağlı
         isDragging = false;
     }
     
-    // --- Giriş İşleyicileri (Güç Çubuğu - TÜM KONTEYNER) ---
+    // --- GÜÇ ÇUBUĞU HAREKET VE HASSASİYET DÜZELTMELERİ (YENİ VE DOĞRU MANTIK) ---
+    
+    // İsteka görselinin pozisyonunu ve güç barını günceller
+    function updateCueHandleVisuals() {
+        // İSTEKA GÖRSELİNİ GÜNCELLE: cueHandleVisualY, 0 (üst) ile VISUAL_BAR_HEIGHT (alt) arasında değişir.
+        cueHandle.style.transform = `translateY(${cueHandleVisualY}px)`;
+        
+        // GÜÇ BARINI GÜNCELLE: shotPower'a göre doluluk oranını ayarla.
+        updatePowerBar(shotPower);
+    }
 
     function handleCueSliderDown(e) {
         e.preventDefault();
         if (currentScreen !== 'game' || isBallMoving || !isAiming) return;
         
-        // Power Bar Container, Handle veya Fill tıklandığında sürüklemeyi başlat
-        if (e.target === powerBarContainer || e.target === cueHandle || e.target.id === 'powerBarFill') {
+        // Tıklanan elemanın powerBarContainer olduğundan emin ol (Touch/Mouse)
+        if (e.target.closest('#powerBarContainer')) {
             isSliderDragging = true;
             
-            // Başlangıç Y pozisyonunu kaydet (ekran koordinatı)
-            dragStartY = e.clientY || e.touches[0].clientY;
+            const clientY = e.clientY || (e.touches && e.touches[0] ? e.touches[0].clientY : 0);
             
-            // Sürükleme başlarken handle'ın 0 güç pozisyonunda olmasını sağla
-            cueHandle.style.transform = 'translateY(0px)';
-            updatePowerBar(0);
-            shotPower = 0;
+            // Sürüklemenin başladığı ekran Y koordinatını kaydet
+            dragStartScreenY = clientY; 
+            
+            // Başlangıçta görseli ve gücü sıfırla
+            cueHandleVisualY = 0; 
+            shotPower = 0; 
+            updateCueHandleVisuals(); 
         }
     }
     
+    // DÜZELTME #4: Bu fonksiyon artık document'ten dinleniyor (Sınırsız çekme için)
     function handleCueSliderMove(e) {
-        e.preventDefault();
         if (!isSliderDragging || !isAiming) return;
+        e.preventDefault();
 
-        const clientY = e.clientY || e.touches[0].clientY;
+        const clientY = e.clientY || (e.touches && e.touches[0] ? e.touches[0].clientY : dragStartScreenY);
         
-        // Sürüklenen mesafeyi hesapla (aşağı doğru pozitif olmalı)
-        const dragDistance = clientY - dragStartY;
+        // DÜZELTME #3: Ters Çekiş Yönü. Aşağı çekmek (clientY > dragStartScreenY) gücü artırır.
+        const deltaY = clientY - dragStartScreenY; 
         
-        // Kaymayı 0 (başlangıç) ve maksimum kayma (tam güç) arasında sınırla
-        let displacement = Math.min(sliderMaxDisplacement, Math.max(0, dragDistance));
+        // DÜZELTME #1: Hassasiyet. Çekme mesafesini SENSITIVITY ile sınırla.
+        // powerDrag, 0 ile POWER_DRAG_SENSITIVITY (500px) arasındadır.
+        const powerDrag = Math.min(Math.max(0, deltaY), POWER_DRAG_SENSITIVITY);
 
-        // Handle'ı görsel olarak aşağı kaydır
-        cueHandle.style.transform = `translateY(${displacement}px)`;
+        // Güç Oranı (0.0 ile 1.0 arası)
+        const powerRatio = powerDrag / POWER_DRAG_SENSITIVITY;
         
-        // Güç Hesaplama: normalize edilmiş kayma (0.0 - 1.0)
-        const normalizedPower = displacement / sliderMaxDisplacement;
-        
-        shotPower = normalizedPower * MAX_SHOT_POWER;
-        updatePowerBar(shotPower);
+        // DÜZELTME #2: İsteka Çekme Oranını Eşitle (Aynı Oran)
+        // İstekanın görsel pozisyonu, Güç Oranı * Görsel Yükseklik olacak.
+        cueHandleVisualY = powerRatio * VISUAL_BAR_HEIGHT; 
+
+        // Güç Hesaplama
+        shotPower = powerRatio * MAX_SHOT_POWER;
+
+        updateCueHandleVisuals(); 
     }
 
+    // DÜZELTME #4: Bu fonksiyon artık document'ten dinleniyor (Sınırsız çekme için)
     function handleCueSliderUp(e) {
-        // e.preventDefault(); // Burada engelleme, document üzerindeki dinleyiciyi de etkileyebilir.
         if (!isSliderDragging || !isAiming) return;
         isSliderDragging = false;
         
-        // Güç çubuğu handle'ını sıfırla (animasyonlu geri dönüş)
-        cueHandle.style.transform = 'translateY(0px)';
+        // Atış bittikten veya iptal edildikten sonra istekayı hemen yukarı çek (sıfırla)
+        cueHandleVisualY = 0;
         
-        if (shotPower > 0.5) { // Minimum güç sınırı (vuruşu gerçekleştir)
+        if (shotPower > 0.5) { // Minimum güç sınırı (0.5 power)
             isAiming = false;
             document.getElementById('powerBarContainer').style.display = 'none';
             document.getElementById('englishSelector').style.display = 'none';
             executeShot();
         } else {
-            // Vuruş gerçekleşmedi, nişan alma aşamasında kal
-            shotPower = 0;
-            updatePowerBar(0);
+            // Yeterli güç yoksa
+            shotPower = 0; 
         }
+        updateCueHandleVisuals(); // Görseli sıfırla
     }
 
 
-    // English Selector Handlers (Falso Seçici İşleyicileri - Aynı Kaldı)
+    // English Selector Handlers (Falso Seçici İşleyicileri)
     let isEnglishDragging = false;
     function handleEnglishDown(e) {
         e.preventDefault();
@@ -819,9 +884,8 @@
 
     function updatePowerBar(power) {
         const powerLevel = Math.min(power / MAX_SHOT_POWER, 1);
-        const powerBarFill = document.getElementById('powerBarFill');
         
-        // Dikey çubuk (isteka) olduğu için yüksekliği (aşağı doğru dolum) ayarla
+        // Dikey çubuk olduğu için yüksekliği ayarla (Alttan yukarı doluyor)
         powerBarFill.style.height = `${powerLevel * 100}%`;
 
         // Güce göre renk değiştir
@@ -832,8 +896,6 @@
         } else {
             powerBarFill.style.backgroundColor = '#ef4444'; // Kırmızı
         }
-
-        // İsteka handle'ının görsel konumu handleMove içinde ayarlanıyor.
     }
 
     function executeShot() {
@@ -852,7 +914,7 @@
         shotAttempt++;
     }
 
-    // --- UI/Screen Management (Ekran Yönetimi - Aynı Kaldı) ---
+    // --- UI/Screen Management (Ekran Yönetimi) ---
 
     function showScreen(screenId) {
         currentScreen = screenId;
@@ -898,8 +960,6 @@
         attachButtonListeners();
     }
     
-    // ... (Menu functions and other boilerplate remains the same) ...
-
     function attachButtonListeners() {
         document.querySelectorAll('.js-button').forEach(button => {
             button.addEventListener('click', () => {
@@ -1142,7 +1202,7 @@
                     // Equip after purchase
                     if (type === 'cue') playerData.selectedCue = name;
                     if (type === 'ball') playerData.selectedBall = name;
-                    currentCue = shopItems.cues.find(c => c.name === name) || currentCue;
+                    currentCue = shopItems.cues.find(c => c.name === name) || shopItems.cues[0];
                     saveGameData();
                     showScreen('shop');
                 });
@@ -1154,7 +1214,7 @@
             // Equip item
             if (type === 'cue') playerData.selectedCue = name;
             if (type === 'ball') playerData.selectedBall = name;
-            currentCue = shopItems.cues.find(c => c.name === name) || currentCue;
+            currentCue = shopItems.cues.find(c => c.name === name) || shopItems.cues[0];
             saveGameData();
             showScreen('shop');
         }
