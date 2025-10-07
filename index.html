@@ -1,0 +1,1113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3-Cushion Billiards</title>
+    <!-- Tailwind CSS CDN for responsive and modern styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom styles for the game to ensure full screen mobile experience */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #1a202c; /* Dark background */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            user-select: none;
+            overflow: hidden; /* Prevent scrolling on mobile */
+        }
+
+        /* Game Container: Flexible to fit the vertical canvas */
+        #gameContainer {
+            width: 100vw;
+            height: 100vh;
+            max-width: 900px; 
+            max-height: 900px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        /* Canvas for the Billiards Table */
+        #billiardsCanvas {
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.5);
+            border: 10px solid #333; /* Rail/Frame color */
+            border-radius: 8px;
+            touch-action: none; /* Crucial for better touch input */
+            max-width: 90%; /* Max width for vertical orientation */
+            max-height: 90%;
+            background-color: #034827; /* Green cloth */
+        }
+
+        /* General styles for buttons */
+        .game-button {
+            padding: 10px 20px;
+            border-radius: 12px;
+            font-weight: bold;
+            transition: transform 0.1s, box-shadow 0.1s;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4);
+            cursor: pointer;
+            background-color: #4f46e5;
+            color: white;
+            border: none;
+            margin: 8px;
+            font-size: 1.1rem;
+        }
+
+        .game-button:hover, .game-button:active {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.6);
+        }
+
+        /* English Selector area repositioned for better vertical mobile fit */
+        #englishSelector {
+            position: absolute;
+            bottom: 20px; /* Move to bottom left corner for vertical layout */
+            left: 20px;
+            width: 80px;
+            height: 80px;
+            background-color: rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+            border: 2px solid #aaa;
+            cursor: pointer;
+            z-index: 100;
+            display: none; 
+        }
+
+        @media (max-width: 768px) {
+             /* Adjust English selector position for smaller screens */
+            #englishSelector {
+                width: 60px;
+                height: 60px;
+                bottom: 10px;
+                left: 10px;
+            }
+        }
+
+        /* Power bar styling */
+        #powerBarContainer {
+            position: absolute;
+            top: 20px; /* Move power bar to top center for visibility */
+            left: 50%;
+            transform: translateX(-50%);
+            width: 80%;
+            max-width: 400px;
+            height: 20px;
+            background-color: rgba(0, 0, 0, 0.6);
+            border-radius: 10px;
+            overflow: hidden;
+            display: none;
+            border: 2px solid #aaa;
+            z-index: 100;
+        }
+
+        #powerBarFill {
+            width: 0%;
+            height: 100%;
+            background-color: #ef4444; /* Red power */
+            transition: background-color 0.2s;
+        }
+    </style>
+</head>
+<body>
+
+<div id="gameContainer" class="p-4 sm:p-8">
+    <!-- Game Canvas -->
+    <canvas id="billiardsCanvas"></canvas>
+
+    <!-- Main Menu / Screen Container -->
+    <div id="screenContainer" class="absolute inset-0 flex items-center justify-center bg-gray-900 bg-opacity-95 z-20">
+        <!-- Content will be injected here by JavaScript -->
+    </div>
+
+    <!-- Pause Button (always visible during gameplay) -->
+    <button id="pauseButton" class="game-button absolute top-4 right-4 text-sm px-3 py-2 z-10 hidden">PAUSE</button>
+
+    <!-- English/Spin Selection Area -->
+    <div id="englishSelector">
+        <canvas id="englishCanvas" width="80" height="80"></canvas>
+    </div>
+
+    <!-- Power Bar -->
+    <div id="powerBarContainer">
+        <div id="powerBarFill"></div>
+    </div>
+
+</div>
+
+<script>
+    // Constants (UPDATED FOR VERTICAL TABLE AND LARGER BALLS)
+    const CANVAS_WIDTH = 400;  // Vertical table width
+    const CANVAS_HEIGHT = 800; // Vertical table height
+    const BALL_RADIUS = 20;    // Doubled ball size
+    const CUSHION_WIDTH = 10; 
+    const FRICTION = 0.99; 
+    const SPIN_FACTOR = 0.005; 
+    const MIN_VELOCITY = 0.1; 
+    const MAX_SHOT_POWER = 15;
+    const CUE_BALL_COLOR = '#FFFFFF';
+    const OBJECT_BALL_COLOR = '#FF0000'; // Red
+    const OBJECT_BALL_2_COLOR = '#FFFF00'; // Yellow
+    const TEXT_COLOR = '#E5E7EB';
+
+    // Game State Variables
+    let currentScreen = 'main_menu';
+    let gameReady = false;
+    let canvas, ctx;
+    let englishCanvas, englishCtx;
+    let balls = [];
+    let level = 1;
+    let shotAttempt = 1;
+    let isAiming = false;
+    let isDraggingAim = false; // New state for initial angle drag
+    let isPullingBack = false;
+    let mouseStart = { x: 0, y: 0 };
+    let shotAngle = 0;
+    let shotPower = 0;
+    let englishX = 0; 
+    let englishY = 0; 
+    let isBallMoving = false;
+    let hitTargets = { red: false, yellow: false, bands: 0 };
+    let currentCue = { name: "Standard Cue", powerMultiplier: 1.0, price: 0 };
+
+    // Player Data (Managed by localStorage)
+    let playerData = {
+        coins: 0,
+        currentLevel: 1,
+        ownedCues: ["Standard Cue"],
+        ownedBalls: ["Default"],
+        selectedCue: "Standard Cue",
+        selectedBall: "Default",
+        sfx: true,
+        music: true
+    };
+
+    // Level Definitions (Ball positions adjusted for 400x800 canvas)
+    const levels = [
+        // Level 1
+        { white: { x: 200, y: 700 }, red: { x: 200, y: 150 }, yellow: { x: 100, y: 400 } },
+        // Level 2
+        { white: { x: 100, y: 750 }, red: { x: 300, y: 100 }, yellow: { x: 200, y: 450 } },
+        // Level 3
+        { white: { x: 300, y: 600 }, red: { x: 100, y: 100 }, yellow: { x: 300, y: 200 } },
+        // Level 4
+        { white: { x: 200, y: 750 }, red: { x: 150, y: 100 }, yellow: { x: 250, y: 200 } },
+    ];
+
+    // Shop Items
+    const shopItems = {
+        cues: [
+            { name: "Power Stick", powerMultiplier: 1.2, price: 500, description: "A slightly stronger cue for more powerful shots." },
+            { name: "Pro Shooter", powerMultiplier: 1.5, price: 1500, description: "Professional grade, significantly increases shot power." },
+        ],
+        balls: [
+            { name: "Blue Marble", color: '#4477FF', price: 300, description: "A sleek blue design for your cue ball." },
+            { name: "Black Shadow", color: '#333333', price: 800, description: "Stealthy and cool, a dark cue ball." },
+        ]
+    };
+
+    // Utility function to get user ID for localStorage (simplified, no real auth)
+    const getUserId = () => 'local_user';
+
+    // --- Persistence Functions (localStorage) ---
+
+    function loadGameData() {
+        const data = localStorage.getItem(`billiards_data_${getUserId()}`);
+        if (data) {
+            playerData = JSON.parse(data);
+            level = playerData.currentLevel;
+            currentCue = shopItems.cues.find(c => c.name === playerData.selectedCue) || shopItems.cues[0];
+        }
+        // Ensure default items are always available
+        if (!playerData.ownedCues.includes("Standard Cue")) playerData.ownedCues.push("Standard Cue");
+        if (!playerData.ownedBalls.includes("Default")) playerData.ownedBalls.push("Default");
+
+        console.log("Game Data Loaded:", playerData);
+    }
+
+    function saveGameData() {
+        localStorage.setItem(`billiards_data_${getUserId()}`, JSON.stringify(playerData));
+    }
+
+    // --- Ball Class (No Change Needed in Logic) ---
+
+    class Ball {
+        constructor(x, y, color, type) {
+            this.x = x;
+            this.y = y;
+            this.vx = 0;
+            this.vy = 0;
+            this.radius = BALL_RADIUS;
+            this.color = color;
+            this.type = type; // 'cue', 'red', 'yellow'
+            this.mass = 1;
+        }
+
+        update() {
+            if (this.isMoving()) {
+                this.x += this.vx;
+                this.y += this.vy;
+
+                // Apply friction/damping
+                this.vx *= FRICTION;
+                this.vy *= FRICTION;
+
+                // Stop ball if velocity is very low
+                if (Math.hypot(this.vx, this.vy) < MIN_VELOCITY) {
+                    this.vx = 0;
+                    this.vy = 0;
+                }
+
+                this.checkCushionCollision();
+            }
+        }
+
+        isMoving() {
+            return this.vx !== 0 || this.vy !== 0;
+        }
+
+        checkCushionCollision() {
+            let hit = false;
+            // Left cushion
+            if (this.x - this.radius < CUSHION_WIDTH) {
+                this.x = CUSHION_WIDTH + this.radius;
+                this.vx *= -1;
+                hit = true;
+            }
+            // Right cushion
+            if (this.x + this.radius > CANVAS_WIDTH - CUSHION_WIDTH) {
+                this.x = CANVAS_WIDTH - CUSHION_WIDTH - this.radius;
+                this.vx *= -1;
+                hit = true;
+            }
+            // Top cushion
+            if (this.y - this.radius < CUSHION_WIDTH) {
+                this.y = CUSHION_WIDTH + this.radius;
+                this.vy *= -1;
+                hit = true;
+            }
+            // Bottom cushion
+            if (this.y + this.radius > CANVAS_HEIGHT - CUSHION_WIDTH) {
+                this.y = CANVAS_HEIGHT - CUSHION_WIDTH - this.radius;
+                this.vy *= -1;
+                hit = true;
+            }
+
+            if (hit && this.type === 'cue') {
+                hitTargets.bands++;
+                // Apply a slight velocity change based on English upon cushion impact
+                const spinAdjustment = Math.PI / 180 * 2; 
+                this.vx = Math.cos(Math.atan2(this.vy, this.vx) + (englishX * SPIN_FACTOR)) * Math.hypot(this.vx, this.vy);
+                this.vy = Math.sin(Math.atan2(this.vy, this.vx) + (englishY * SPIN_FACTOR)) * Math.hypot(this.vx, this.vy);
+            }
+        }
+
+        draw() {
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+
+            let drawColor = this.color;
+            if (this.type === 'cue') {
+                const customBall = shopItems.balls.find(b => b.name === playerData.selectedBall);
+                if (customBall && playerData.selectedBall !== 'Default') {
+                    drawColor = customBall.color;
+                } else if (playerData.selectedBall === 'Default') {
+                    drawColor = CUE_BALL_COLOR;
+                }
+            }
+
+            ctx.fillStyle = drawColor;
+            ctx.fill();
+            ctx.strokeStyle = '#333';
+            ctx.lineWidth = 2; // Thicker border for larger balls
+            ctx.stroke();
+
+            // Draw center dot for English visualization
+            if (this.type === 'cue') {
+                ctx.beginPath();
+                ctx.arc(this.x + englishX * 8, this.y + englishY * 8, 3, 0, Math.PI * 2); // Larger English dot
+                ctx.fillStyle = '#111';
+                ctx.fill();
+            }
+        }
+    }
+
+    // --- Game Logic and Core Functions ---
+
+    function initializeGame() {
+        canvas = document.getElementById('billiardsCanvas');
+        ctx = canvas.getContext('2d');
+        englishCanvas = document.getElementById('englishCanvas');
+        englishCtx = englishCanvas.getContext('2d');
+
+        canvas.width = CANVAS_WIDTH;
+        canvas.height = CANVAS_HEIGHT;
+
+        // Make canvas responsive (maintaining vertical aspect ratio)
+        const updateCanvasSize = () => {
+            const container = document.getElementById('gameContainer');
+            const ratio = CANVAS_WIDTH / CANVAS_HEIGHT; // 400/800 = 0.5
+
+            let newWidth = container.clientWidth;
+            let newHeight = container.clientHeight;
+
+            if (newWidth / newHeight > ratio) {
+                // Constrained by height (too wide)
+                newWidth = newHeight * ratio;
+            } else {
+                // Constrained by width (too tall)
+                newHeight = newWidth / ratio;
+            }
+
+            // Ensure canvas fits nicely within the container
+            const margin = 50; 
+            canvas.style.width = `${Math.min(newWidth - margin, CANVAS_WIDTH)}px`;
+            canvas.style.height = `${Math.min(newHeight - margin, CANVAS_HEIGHT)}px`;
+        };
+
+        window.addEventListener('resize', updateCanvasSize);
+        updateCanvasSize(); // Initial call
+
+        loadGameData();
+        loadLevel(level);
+
+        // Add input listeners
+        canvas.addEventListener('mousedown', handlePointerDown);
+        canvas.addEventListener('mousemove', handlePointerMove);
+        canvas.addEventListener('mouseup', handlePointerUp);
+        canvas.addEventListener('touchstart', handlePointerDown);
+        canvas.addEventListener('touchmove', handlePointerMove);
+        canvas.addEventListener('touchend', handlePointerUp);
+
+        englishCanvas.addEventListener('mousedown', handleEnglishDown);
+        englishCanvas.addEventListener('mousemove', handleEnglishMove);
+        englishCanvas.addEventListener('mouseup', handleEnglishUp);
+        englishCanvas.addEventListener('touchstart', handleEnglishDown);
+        englishCanvas.addEventListener('touchmove', handleEnglishMove);
+        englishCanvas.addEventListener('touchend', handleEnglishUp);
+        
+        document.getElementById('pauseButton').addEventListener('click', () => showScreen('pause_menu'));
+
+        gameReady = true;
+        showScreen('main_menu');
+        gameLoop();
+    }
+
+    function loadLevel(lvl) {
+        const currentLevelData = levels[(lvl - 1) % levels.length];
+        if (!currentLevelData) {
+            showScreen('game_end'); 
+            return;
+        }
+
+        level = lvl;
+        shotAttempt = 1;
+        isBallMoving = false;
+        isAiming = false;
+        isDraggingAim = false;
+        isPullingBack = false;
+
+        // Reset balls
+        balls = [];
+        balls.push(new Ball(currentLevelData.white.x, currentLevelData.white.y, CUE_BALL_COLOR, 'cue'));
+        balls.push(new Ball(currentLevelData.red.x, currentLevelData.red.y, OBJECT_BALL_COLOR, 'red'));
+        balls.push(new Ball(currentLevelData.yellow.x, currentLevelData.yellow.y, OBJECT_BALL_2_COLOR, 'yellow'));
+        
+        resetShotTargets();
+    }
+
+    function resetShotTargets() {
+         hitTargets = { red: false, yellow: false, bands: 0 };
+    }
+
+    function gameLoop() {
+        if (gameReady) {
+            update();
+            draw();
+            checkGameState();
+        }
+        requestAnimationFrame(gameLoop);
+    }
+
+    function update() {
+        if (currentScreen !== 'game') return;
+
+        let allStopped = true;
+        balls.forEach(ball => {
+            ball.update();
+            if (ball.isMoving()) {
+                allStopped = false;
+            }
+        });
+
+        isBallMoving = !allStopped;
+
+        if (isBallMoving) {
+            // Check for ball-to-ball collisions
+            for (let i = 0; i < balls.length; i++) {
+                for (let j = i + 1; j < balls.length; j++) {
+                    checkBallCollision(balls[i], balls[j]);
+                }
+            }
+        }
+    }
+
+    function checkGameState() {
+        if (currentScreen !== 'game') return;
+
+        // If all balls stop, check win/lose condition
+        if (!isBallMoving && (isAiming || isPullingBack)) {
+            // Do nothing, still aiming/pulling back
+        } else if (!isBallMoving && shotPower > 0) {
+            // Shot has concluded
+            
+            if (hitTargets.red && hitTargets.yellow && hitTargets.bands >= 3) {
+                // Win
+                showScreen('level_complete');
+            } else {
+                // FAIL: Automatically restart level without message box
+                if (!hitTargets.red && !hitTargets.yellow) {
+                    console.log("Foul! Missed both balls. Auto Restarting level.");
+                } else {
+                    console.log(`Missed! Needed 3 cushions, only hit ${hitTargets.bands}. Auto Restarting level.`);
+                }
+                
+                loadLevel(level); // Auto restart
+            }
+            
+            resetShotTargets();
+            shotPower = 0;
+            // Now allow aiming again
+            isAiming = true;
+            document.getElementById('englishSelector').style.display = 'block';
+        } else if (!isBallMoving && shotPower === 0) {
+            // Ready to take a shot, set aiming true
+            isAiming = true;
+            document.getElementById('englishSelector').style.display = 'block';
+        }
+    }
+
+    function checkBallCollision(b1, b2) {
+        const dx = b2.x - b1.x;
+        const dy = b2.y - b1.y;
+        const distSq = dx * dx + dy * dy;
+        const minDist = b1.radius + b2.radius;
+
+        if (distSq <= minDist * minDist) {
+            // Collision detected
+            const dist = Math.sqrt(distSq);
+            const nx = dx / dist; // Normal x
+            const ny = dy / dist; // Normal y
+
+            // Separate balls to prevent sticking
+            const overlap = minDist - dist;
+            b1.x -= overlap * 0.5 * nx;
+            b1.y -= overlap * 0.5 * ny;
+            b2.x += overlap * 0.5 * nx;
+            b2.y += overlap * 0.5 * ny;
+
+            // Simple 2D collision response (Conservation of Momentum)
+            const v1n = b1.vx * nx + b1.vy * ny;
+            const v2n = b2.vx * nx + b2.vy * ny;
+
+            if (v1n > 0 || v2n < 0) {
+                 const newV1n = v2n;
+                 const newV2n = v1n;
+
+                 b1.vx += (newV1n - v1n) * nx;
+                 b1.vy += (newV1n - v1n) * ny;
+                 b2.vx += (newV2n - v2n) * nx;
+                 b2.vy += (newV2n - v2n) * ny;
+
+                // Check for cue ball hits
+                if (b1.type === 'cue' || b2.type === 'cue') {
+                    const otherBall = b1.type === 'cue' ? b2 : b1;
+                    if (otherBall.type === 'red') hitTargets.red = true;
+                    if (otherBall.type === 'yellow') hitTargets.yellow = true;
+                }
+            }
+
+        }
+    }
+
+    function draw() {
+        // Clear canvas
+        ctx.fillStyle = '#034827';
+        ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+        // Draw outer rails/bands 
+        ctx.fillStyle = '#056238';
+        ctx.fillRect(0, 0, CANVAS_WIDTH, CUSHION_WIDTH); 
+        ctx.fillRect(0, CANVAS_HEIGHT - CUSHION_WIDTH, CANVAS_WIDTH, CUSHION_WIDTH); 
+        ctx.fillRect(0, CUSHION_WIDTH, CUSHION_WIDTH, CANVAS_HEIGHT - 2 * CUSHION_WIDTH); 
+        ctx.fillRect(CANVAS_WIDTH - CUSHION_WIDTH, CUSHION_WIDTH, CUSHION_WIDTH, CANVAS_HEIGHT - 2 * CUSHION_WIDTH); 
+
+        // Draw balls
+        balls.forEach(ball => ball.draw());
+
+        // Draw cue and aim line if aiming/pulling back
+        if (isAiming || isPullingBack) {
+            drawAiming();
+        }
+
+        // Draw current level text
+        ctx.fillStyle = TEXT_COLOR;
+        ctx.font = 'bold 24px Inter';
+        ctx.textAlign = 'left';
+        ctx.fillText(`Level: ${level}`, 20, 40);
+        ctx.fillText(`Attempts: ${shotAttempt}`, 20, 75);
+
+        // Draw English Selector UI
+        drawEnglishSelector();
+    }
+
+    function drawAiming() {
+        const cueBall = balls[0];
+        let angle = shotAngle;
+
+        const cueLength = 150;
+        const cueTipGap = BALL_RADIUS + 5; // Gap between cue tip and ball
+        let pullBackDist = 0;
+
+        if (isPullingBack) {
+            pullBackDist = shotPower * 10; // Pull back visually based on power
+        }
+        
+        // Cue starts further away when pulled back
+        const cueStartDist = cueTipGap + pullBackDist; 
+        const cueEndDist = cueStartDist + cueLength;
+
+        // Coordinates for the cue stick (drawn behind the ball relative to angle)
+        const cueStartX = cueBall.x - Math.cos(angle) * cueStartDist;
+        const cueStartY = cueBall.y - Math.sin(angle) * cueStartDist;
+        const cueEndX = cueBall.x - Math.cos(angle) * cueEndDist;
+        const cueEndY = cueBall.y - Math.sin(angle) * cueEndDist;
+
+        // Draw dotted aiming line (Straight path)
+        ctx.setLineDash([5, 5]);
+        ctx.strokeStyle = '#FFFFFF';
+        ctx.lineWidth = 2;
+        ctx.globalAlpha = 0.5;
+        ctx.beginPath();
+        ctx.moveTo(cueBall.x, cueBall.y);
+        ctx.lineTo(cueBall.x + Math.cos(angle) * 1000, cueBall.y + Math.sin(angle) * 1000);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.globalAlpha = 1.0;
+        
+        // Draw Cue Stick
+        ctx.strokeStyle = '#8B4513'; // Brown cue
+        ctx.lineWidth = 6;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(cueStartX, cueStartY);
+        ctx.lineTo(cueEndX, cueEndY);
+        ctx.stroke();
+    }
+
+    function drawEnglishSelector() {
+        const size = englishCanvas.width;
+        const center = size / 2;
+
+        englishCtx.clearRect(0, 0, size, size);
+        englishCtx.beginPath();
+        englishCtx.arc(center, center, center - 2, 0, Math.PI * 2);
+        englishCtx.fillStyle = CUE_BALL_COLOR;
+        englishCtx.strokeStyle = '#aaa';
+        englishCtx.lineWidth = 2;
+        englishCtx.fill();
+        englishCtx.stroke();
+
+        const markerX = center + englishX * (center - 5);
+        const markerY = center + englishY * (center - 5);
+
+        englishCtx.beginPath();
+        englishCtx.arc(markerX, markerY, 5, 0, Math.PI * 2);
+        englishCtx.fillStyle = '#000';
+        englishCtx.fill();
+    }
+
+    // --- Input Handlers (UPDATED FOR MANUAL AIMING DRAG) ---
+
+    function getRelativeCoordinates(e) {
+        const rect = canvas.getBoundingClientRect();
+        const x = (e.clientX || e.touches[0].clientX) - rect.left;
+        const y = (e.clientY || e.touches[0].clientY) - rect.top;
+        const scaleX = CANVAS_WIDTH / rect.width;
+        const scaleY = CANVAS_HEIGHT / rect.height;
+        return { x: x * scaleX, y: y * scaleY };
+    }
+
+    function handlePointerDown(e) {
+        e.preventDefault();
+        if (currentScreen !== 'game' || isBallMoving) return;
+
+        const currentPos = getRelativeCoordinates(e);
+        const cueBall = balls[0];
+        const distToBall = Math.hypot(currentPos.x - cueBall.x, currentPos.y - cueBall.y);
+
+        if (distToBall < BALL_RADIUS * 2) {
+            // Click near the ball: START AIM DRAG
+            isAiming = true;
+            isDraggingAim = true;
+            isPullingBack = false;
+            mouseStart = currentPos;
+            shotPower = 0;
+            updatePowerBar();
+        } else {
+             isAiming = false;
+        }
+    }
+
+    function handlePointerMove(e) {
+        e.preventDefault();
+        if (currentScreen !== 'game' || isBallMoving || !isAiming) return;
+
+        const currentPos = getRelativeCoordinates(e);
+        const cueBall = balls[0];
+        const dx = currentPos.x - mouseStart.x;
+        const dy = currentPos.y - mouseStart.y;
+        const dragDist = Math.hypot(dx, dy);
+        
+        if (isDraggingAim) {
+            // Step 1: Aiming (angle determination)
+            if (dragDist > 10) { // Set angle after minimal drag
+                // shotAngle is the opposite of the drag direction (cue pulls back from drag point)
+                shotAngle = Math.atan2(dy, dx) + Math.PI;
+                isDraggingAim = false; 
+                isPullingBack = true;
+                // Re-calculate mouseStart to be the point where the drag ended (to start power from 0 here)
+                mouseStart = currentPos; 
+                document.getElementById('powerBarContainer').style.display = 'block';
+            }
+        } else if (isPullingBack) {
+            // Step 2: Power charging (Pulling back along the established angle)
+            const powerDx = currentPos.x - mouseStart.x;
+            const powerDy = currentPos.y - mouseStart.y;
+            
+            // Calculate distance pulled along the shotAngle (opposite of cue direction)
+            const pullBackAngle = shotAngle + Math.PI;
+            const projectedDist = powerDx * Math.cos(pullBackAngle) + powerDy * Math.sin(pullBackAngle);
+
+            if (projectedDist > 0) {
+                 shotPower = Math.min(projectedDist / 5, MAX_SHOT_POWER); // Scale power
+            } else {
+                 shotPower = 0;
+            }
+
+            updatePowerBar();
+        }
+    }
+
+    function handlePointerUp(e) {
+        e.preventDefault();
+        if (currentScreen !== 'game' || isBallMoving || !isAiming) return;
+        
+        isDraggingAim = false;
+
+        if (isPullingBack && shotPower > 0) {
+            isAiming = false;
+            isPullingBack = false;
+            document.getElementById('powerBarContainer').style.display = 'none';
+            document.getElementById('englishSelector').style.display = 'none';
+            executeShot();
+        } else {
+            // If the user released before pulling back or power was 0
+            isPullingBack = false;
+            document.getElementById('powerBarContainer').style.display = 'none';
+        }
+    }
+    
+    // English Selector Handlers (No change needed)
+    let isEnglishDragging = false;
+    function handleEnglishDown(e) {
+        e.preventDefault();
+        if (currentScreen !== 'game' || isBallMoving || !isAiming) return;
+        isEnglishDragging = true;
+        handleEnglishMove(e);
+    }
+    
+    function handleEnglishMove(e) {
+        e.preventDefault();
+        if (currentScreen !== 'game' || !isEnglishDragging) return;
+        
+        const rect = englishCanvas.getBoundingClientRect();
+        const clientX = e.clientX || e.touches[0].clientX;
+        const clientY = e.clientY || e.touches[0].clientY;
+
+        const x = clientX - rect.left - rect.width / 2;
+        const y = clientY - rect.top - rect.height / 2;
+        const maxDist = rect.width / 2 - 5;
+        const dist = Math.hypot(x, y);
+
+        if (dist <= maxDist) {
+            englishX = x / maxDist; // Normalized to -1 to 1
+            englishY = y / maxDist;
+        } else {
+             // Clamp to edge
+            englishX = x / dist;
+            englishY = y / dist;
+        }
+        drawEnglishSelector();
+    }
+    
+    function handleEnglishUp(e) {
+        e.preventDefault();
+        isEnglishDragging = false;
+    }
+
+
+    function updatePowerBar() {
+        const powerLevel = Math.min(shotPower / MAX_SHOT_POWER, 1) * 100;
+        const powerBarFill = document.getElementById('powerBarFill');
+        powerBarFill.style.width = `${powerLevel}%`;
+
+        // Change color based on power
+        if (powerLevel < 33) {
+            powerBarFill.style.backgroundColor = '#22c55e'; // Green
+        } else if (powerLevel < 66) {
+            powerBarFill.style.backgroundColor = '#facc15'; // Yellow
+        } else {
+            powerBarFill.style.backgroundColor = '#ef4444'; // Red
+        }
+    }
+
+    function executeShot() {
+        const cueBall = balls[0];
+
+        // Apply power and cue multiplier
+        const totalPower = shotPower * currentCue.powerMultiplier;
+
+        cueBall.vx = Math.cos(shotAngle) * totalPower;
+        cueBall.vy = Math.sin(shotAngle) * totalPower;
+
+        isBallMoving = true;
+        shotAttempt++;
+    }
+
+    function normalizeAngle(angle) {
+        let normalized = angle % (2 * Math.PI);
+        if (normalized < 0) {
+            normalized += 2 * Math.PI;
+        }
+        return normalized;
+    }
+
+    // --- UI/Screen Management (Removed showMessageBox uses for failure) ---
+
+    function showScreen(screenId) {
+        currentScreen = screenId;
+        const container = document.getElementById('screenContainer');
+        const pauseButton = document.getElementById('pauseButton');
+        container.innerHTML = '';
+        container.style.display = 'flex';
+        pauseButton.classList.add('hidden');
+        document.getElementById('englishSelector').style.display = 'none';
+        document.getElementById('powerBarContainer').style.display = 'none';
+
+        switch (screenId) {
+            case 'main_menu':
+                container.innerHTML = createMainMenu();
+                break;
+            case 'options':
+                container.innerHTML = createOptionsScreen();
+                break;
+            case 'shop':
+                container.innerHTML = createShopScreen();
+                break;
+            case 'game':
+                container.style.display = 'none';
+                pauseButton.classList.remove('hidden');
+                document.getElementById('englishSelector').style.display = 'block';
+                isAiming = true;
+                break;
+            case 'pause_menu':
+                container.innerHTML = createPauseMenu();
+                break;
+            case 'level_complete':
+                container.innerHTML = createLevelCompleteScreen();
+                break;
+            case 'game_end':
+                container.innerHTML = createGameEndScreen();
+                break;
+        }
+        attachButtonListeners();
+    }
+
+    function attachButtonListeners() {
+        document.querySelectorAll('.js-button').forEach(button => {
+            button.addEventListener('click', () => {
+                const action = button.getAttribute('data-action');
+                handleMenuAction(action);
+            });
+        });
+    }
+
+    function handleMenuAction(action) {
+        switch (action) {
+            case 'start':
+                loadLevel(playerData.currentLevel);
+                showScreen('game');
+                break;
+            case 'options':
+                showScreen('options');
+                break;
+            case 'shop':
+                showScreen('shop');
+                break;
+            case 'continue':
+                showScreen('game');
+                break;
+            case 'main_menu':
+                showScreen('main_menu');
+                break;
+            case 'next_level':
+                playerData.currentLevel++;
+                saveGameData();
+                loadLevel(playerData.currentLevel);
+                showScreen('game');
+                break;
+            case 'toggle_sfx':
+                playerData.sfx = !playerData.sfx;
+                saveGameData();
+                showScreen('options');
+                break;
+            case 'toggle_music':
+                playerData.music = !playerData.music;
+                saveGameData();
+                showScreen('options');
+                break;
+        }
+    }
+    
+    // --- Message Box (Kept for Shop/General Use) ---
+    function showMessageBox(title, message, onConfirm = null) {
+        const container = document.getElementById('screenContainer');
+        container.style.display = 'flex';
+        container.innerHTML = `
+            <div class="bg-white p-6 rounded-xl shadow-2xl max-w-sm text-center">
+                <h3 class="text-2xl font-bold text-gray-800 mb-4">${title}</h3>
+                <p class="text-gray-600 mb-6">${message}</p>
+                <button id="msgBoxOk" class="game-button">OK</button>
+            </div>
+        `;
+        document.getElementById('msgBoxOk').addEventListener('click', () => {
+            if (onConfirm) onConfirm();
+        });
+        currentScreen = 'message_box'; 
+    }
+
+    // --- HTML Content Generators (No changes to logic, only output) ---
+
+    function createMainMenu() {
+        return `
+            <div class="p-8 text-center bg-gray-800 rounded-xl shadow-2xl w-full max-w-sm">
+                <h1 class="text-4xl font-extrabold text-yellow-400 mb-8">3-CUSHION CAROM</h1>
+                <div class="flex flex-col space-y-4">
+                    <button class="game-button js-button" data-action="start">Start (Level ${playerData.currentLevel})</button>
+                    <button class="game-button js-button" data-action="options">Options</button>
+                    <button class="game-button js-button" data-action="shop">Shop</button>
+                </div>
+            </div>
+        `;
+    }
+
+    function createPauseMenu() {
+        return `
+            <div class="p-8 text-center bg-gray-800 rounded-xl shadow-2xl w-full max-w-sm">
+                <h1 class="text-3xl font-bold text-white mb-6">Game Paused</h1>
+                <div class="flex flex-col space-y-4">
+                    <button class="game-button js-button" data-action="continue">Continue</button>
+                    <button class="game-button js-button" data-action="options">Settings</button>
+                    <button class="game-button js-button" data-action="main_menu">Main Menu</button>
+                </div>
+            </div>
+        `;
+    }
+
+    function calculateCoins() {
+        const baseCoins = 100;
+        let bonus = 0;
+        if (shotAttempt === 1) bonus = 50;
+        if (shotAttempt <= 3) bonus = 20;
+
+        const earnedCoins = baseCoins + bonus;
+        playerData.coins += earnedCoins;
+        saveGameData();
+        return earnedCoins;
+    }
+
+    function createLevelCompleteScreen() {
+        const earned = calculateCoins();
+        return `
+            <div class="p-8 text-center bg-green-700 rounded-xl shadow-2xl w-full max-w-sm text-white">
+                <h1 class="text-4xl font-extrabold mb-4">LEVEL CLEARED!</h1>
+                <p class="text-lg mb-2">Attempts: ${shotAttempt}</p>
+                <p class="text-2xl font-bold mb-6">Coins Earned: <span class="text-yellow-300">${earned}</span></p>
+                <p class="text-lg mb-6">Total Coins: ${playerData.coins}</p>
+                <div class="flex flex-col space-y-4">
+                    <button class="game-button bg-green-900 js-button" data-action="next_level">Next Level</button>
+                    <button class="game-button js-button" data-action="options">Settings</button>
+                    <button class="game-button js-button" data-action="main_menu">Main Menu</button>
+                </div>
+            </div>
+        `;
+    }
+    
+    function createGameEndScreen() {
+        return `
+            <div class="p-8 text-center bg-yellow-500 rounded-xl shadow-2xl w-full max-w-sm text-gray-900">
+                <h1 class="text-4xl font-extrabold mb-4">CONGRATULATIONS!</h1>
+                <p class="text-xl mb-6">You've completed all available levels!</p>
+                <p class="text-lg mb-6">Total Coins: ${playerData.coins}</p>
+                <div class="flex flex-col space-y-4">
+                    <button class="game-button bg-yellow-700 text-white js-button" data-action="shop">Visit Shop</button>
+                    <button class="game-button bg-gray-700 text-white js-button" data-action="main_menu">Main Menu</button>
+                </div>
+            </div>
+        `;
+    }
+
+    function createOptionsScreen() {
+        const sfxText = playerData.sfx ? 'ON' : 'OFF';
+        const musicText = playerData.music ? 'ON' : 'OFF';
+
+        return `
+            <div class="p-8 text-center bg-gray-800 rounded-xl shadow-2xl w-full max-w-sm text-white">
+                <h1 class="text-3xl font-bold mb-6">Options</h1>
+                <div class="flex flex-col space-y-4">
+                    <div class="flex justify-between items-center bg-gray-700 p-3 rounded-lg">
+                        <span>Sound Effects:</span>
+                        <button class="game-button text-sm px-4 py-2 ${playerData.sfx ? 'bg-green-600' : 'bg-red-600'} js-button" data-action="toggle_sfx">${sfxText}</button>
+                    </div>
+                    <div class="flex justify-between items-center bg-gray-700 p-3 rounded-lg">
+                        <span>Music:</span>
+                        <button class="game-button text-sm px-4 py-2 ${playerData.music ? 'bg-green-600' : 'bg-red-600'} js-button" data-action="toggle_music">${musicText}</button>
+                    </div>
+                    <a href="mailto:support@billiardsgame.com" class="game-button bg-indigo-600 hover:bg-indigo-700" target="_blank">Contact Us</a>
+                    <button class="game-button bg-gray-500 hover:bg-gray-600 js-button" data-action="main_menu">Back</button>
+                </div>
+            </div>
+        `;
+    }
+
+    function createShopScreen() {
+        let shopHtml = `
+            <div class="p-8 text-center bg-gray-800 rounded-xl shadow-2xl w-full max-w-md text-white">
+                <h1 class="text-3xl font-bold mb-2">Shop</h1>
+                <p class="text-yellow-400 text-xl mb-6">Coins: ${playerData.coins}</p>
+                
+                <h2 class="text-2xl font-semibold mt-6 mb-3 border-b border-gray-700 pb-1">Cues (Power)</h2>
+        `;
+
+        // Cues Section
+        shopItems.cues.forEach(item => {
+            const isOwned = playerData.ownedCues.includes(item.name);
+            const isSelected = playerData.selectedCue === item.name;
+            const buttonText = isOwned ? (isSelected ? 'EQUIPPED' : 'Equip') : `Buy - ${item.price} 💰`;
+            const buttonColor = isOwned ? (isSelected ? 'bg-green-600' : 'bg-blue-600') : (playerData.coins >= item.price ? 'bg-red-500' : 'bg-gray-600');
+
+            shopHtml += `
+                <div class="flex justify-between items-center bg-gray-700 p-3 rounded-lg mb-3">
+                    <div class="text-left">
+                        <span class="font-bold">${item.name}</span> 
+                        <span class="text-sm text-gray-400"> (Power x${item.powerMultiplier.toFixed(1)})</span>
+                        <p class="text-xs text-gray-400">${item.description}</p>
+                    </div>
+                    <button class="game-button text-sm px-4 py-2 ${buttonColor} js-shop-item" data-type="cue" data-name="${item.name}" data-price="${item.price}" data-owned="${isOwned}" data-selected="${isSelected}" ${!isOwned && playerData.coins < item.price ? 'disabled' : ''}>
+                        ${buttonText}
+                    </button>
+                </div>
+            `;
+        });
+        
+        shopHtml += `<h2 class="text-2xl font-semibold mt-6 mb-3 border-b border-gray-700 pb-1">Balls (Cosmetic)</h2>`;
+
+        // Balls Section
+        shopItems.balls.forEach(item => {
+            const isOwned = playerData.ownedBalls.includes(item.name);
+            const isSelected = playerData.selectedBall === item.name;
+            const buttonText = isOwned ? (isSelected ? 'EQUIPPED' : 'Equip') : `Buy - ${item.price} 💰`;
+            const buttonColor = isOwned ? (isSelected ? 'bg-green-600' : 'bg-blue-600') : (playerData.coins >= item.price ? 'bg-red-500' : 'bg-gray-600');
+
+            shopHtml += `
+                <div class="flex justify-between items-center bg-gray-700 p-3 rounded-lg mb-3">
+                    <div class="text-left">
+                        <div class="inline-block w-4 h-4 rounded-full mr-2" style="background-color: ${item.color}; border: 1px solid #fff;"></div>
+                        <span class="font-bold">${item.name}</span> 
+                        <p class="text-xs text-gray-400">${item.description}</p>
+                    </div>
+                    <button class="game-button text-sm px-4 py-2 ${buttonColor} js-shop-item" data-type="ball" data-name="${item.name}" data-price="${item.price}" data-owned="${isOwned}" data-selected="${isSelected}" ${!isOwned && playerData.coins < item.price ? 'disabled' : ''}>
+                        ${buttonText}
+                    </button>
+                </div>
+            `;
+        });
+
+
+        shopHtml += `
+                <button class="game-button bg-gray-500 hover:bg-gray-600 mt-6 js-button" data-action="main_menu">Back</button>
+            </div>
+        `;
+
+        // Attach shop-specific listeners
+        setTimeout(() => {
+             document.querySelectorAll('.js-shop-item').forEach(button => {
+                button.addEventListener('click', () => {
+                    handleShopAction(button);
+                });
+            });
+        }, 0);
+
+        return shopHtml;
+    }
+
+    function handleShopAction(button) {
+        const type = button.getAttribute('data-type');
+        const name = button.getAttribute('data-name');
+        const price = parseInt(button.getAttribute('data-price'));
+        const isOwned = button.getAttribute('data-owned') === 'true';
+        const isSelected = button.getAttribute('data-selected') === 'true';
+
+        if (!isOwned) {
+            // Buy item
+            if (playerData.coins >= price) {
+                playerData.coins -= price;
+                if (type === 'cue') playerData.ownedCues.push(name);
+                if (type === 'ball') playerData.ownedBalls.push(name);
+                showMessageBox("Purchase Successful!", `${name} has been added to your inventory.`, () => {
+                    // Equip after purchase
+                    if (type === 'cue') playerData.selectedCue = name;
+                    if (type === 'ball') playerData.selectedBall = name;
+                    currentCue = shopItems.cues.find(c => c.name === name) || currentCue;
+                    saveGameData();
+                    showScreen('shop');
+                });
+
+            } else {
+                 showMessageBox("Not Enough Coins", `You need ${price - playerData.coins} more coins to buy ${name}.`);
+            }
+        } else if (!isSelected) {
+            // Equip item
+            if (type === 'cue') playerData.selectedCue = name;
+            if (type === 'ball') playerData.selectedBall = name;
+            currentCue = shopItems.cues.find(c => c.name === name) || currentCue;
+            saveGameData();
+            showScreen('shop');
+        }
+    }
+
+
+    // Initialize the game when the window loads
+    window.onload = initializeGame;
+
+    console.log("NOTE: This application uses localStorage instead of Firebase for persistence.");
+</script>
+
+</body>
+</html>
